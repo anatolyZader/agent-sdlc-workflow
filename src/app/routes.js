@@ -25,7 +25,7 @@ async function registerRoutes(app, options) {
   // 401 = missing/invalid token; 403 = valid token but not allowed (add permission checks here when needed).
   app.addHook('preHandler', async (request, reply) => {
     if (request.url === '/health' || request.url === '/api/health') return;
-    if (!request.url.startsWith('/api/workflow') && !request.url.startsWith('/api/eventstorm')) return;
+    if (!request.url.startsWith('/api/')) return;
 
     const config = container.resolve('config');
     if (!config.workflowToken) return;

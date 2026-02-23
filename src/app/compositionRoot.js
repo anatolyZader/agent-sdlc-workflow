@@ -31,6 +31,7 @@ function createContainer() {
       jwtSecret: process.env.JWT_SECRET || 'dev-secret-change-in-production',
       workflowToken: process.env.WORKFLOW_TOKEN,
       databasePath: process.env.DATABASE_PATH || ':memory:',
+      projectRoot,
     }),
   });
 
@@ -68,6 +69,72 @@ function createContainer() {
     eventstormFacilitationPort: awilix.asClass(claudeEventstorm.ClaudeCodeEventstormAdapter).singleton(),
     eventstormService: awilix.asClass(eventstormServiceModule.EventstormService).singleton(),
     eventstormController: awilix.asClass(eventstormControllerModule.EventstormController).singleton(),
+  });
+
+  // C4 module
+  const c4DiagramAdapter = require(path.join(projectRoot, 'business_modules/c4/infrastructure/adapters/c4DiagramAdapter'));
+  const c4ServiceModule = require(path.join(projectRoot, 'business_modules/c4/app/c4Service'));
+  const c4ControllerModule = require(path.join(projectRoot, 'business_modules/c4/app/c4Controller'));
+  container.register({
+    c4DiagramPort: awilix.asClass(c4DiagramAdapter.C4DiagramAdapter).singleton(),
+    c4Service: awilix.asClass(c4ServiceModule.C4Service).singleton(),
+    c4Controller: awilix.asClass(c4ControllerModule.C4Controller).singleton(),
+  });
+
+  // Spec module
+  const specGeneratorAdapter = require(path.join(projectRoot, 'business_modules/spec/infrastructure/adapters/specGeneratorAdapter'));
+  const specServiceModule = require(path.join(projectRoot, 'business_modules/spec/app/specService'));
+  const specControllerModule = require(path.join(projectRoot, 'business_modules/spec/app/specController'));
+  container.register({
+    specGenerationPort: awilix.asClass(specGeneratorAdapter.SpecGeneratorAdapter).singleton(),
+    specService: awilix.asClass(specServiceModule.SpecService).singleton(),
+    specController: awilix.asClass(specControllerModule.SpecController).singleton(),
+  });
+
+  // Tdd module
+  const tddRunnerAdapter = require(path.join(projectRoot, 'business_modules/tdd/infrastructure/adapters/tddRunnerAdapter'));
+  const tddModuleScaffoldAdapter = require(path.join(projectRoot, 'business_modules/tdd/infrastructure/adapters/tddModuleScaffoldAdapter'));
+  const tddTestGeneratorAdapter = require(path.join(projectRoot, 'business_modules/tdd/infrastructure/adapters/tddTestGeneratorAdapter'));
+  const tddTestRunnerAdapter = require(path.join(projectRoot, 'business_modules/tdd/infrastructure/adapters/tddTestRunnerAdapter'));
+  const tddServiceModule = require(path.join(projectRoot, 'business_modules/tdd/app/tddService'));
+  const tddControllerModule = require(path.join(projectRoot, 'business_modules/tdd/app/tddController'));
+  container.register({
+    tddModuleScaffoldPort: awilix.asClass(tddModuleScaffoldAdapter.TddModuleScaffoldAdapter).singleton(),
+    tddTestGeneratorPort: awilix.asClass(tddTestGeneratorAdapter.TddTestGeneratorAdapter).singleton(),
+    tddTestRunnerPort: awilix.asClass(tddTestRunnerAdapter.TddTestRunnerAdapter).singleton(),
+    tddRunPort: awilix.asClass(tddRunnerAdapter.TddRunnerAdapter).singleton(),
+    tddService: awilix.asClass(tddServiceModule.TddService).singleton(),
+    tddController: awilix.asClass(tddControllerModule.TddController).singleton(),
+  });
+
+  // Lint module
+  const lintRunnerAdapter = require(path.join(projectRoot, 'business_modules/lint/infrastructure/adapters/lintRunnerAdapter'));
+  const lintServiceModule = require(path.join(projectRoot, 'business_modules/lint/app/lintService'));
+  const lintControllerModule = require(path.join(projectRoot, 'business_modules/lint/app/lintController'));
+  container.register({
+    lintRunPort: awilix.asClass(lintRunnerAdapter.LintRunnerAdapter).singleton(),
+    lintService: awilix.asClass(lintServiceModule.LintService).singleton(),
+    lintController: awilix.asClass(lintControllerModule.LintController).singleton(),
+  });
+
+  // Secure module
+  const secureRunnerAdapter = require(path.join(projectRoot, 'business_modules/secure/infrastructure/adapters/secureRunnerAdapter'));
+  const secureServiceModule = require(path.join(projectRoot, 'business_modules/secure/app/secureService'));
+  const secureControllerModule = require(path.join(projectRoot, 'business_modules/secure/app/secureController'));
+  container.register({
+    secureRunPort: awilix.asClass(secureRunnerAdapter.SecureRunnerAdapter).singleton(),
+    secureService: awilix.asClass(secureServiceModule.SecureService).singleton(),
+    secureController: awilix.asClass(secureControllerModule.SecureController).singleton(),
+  });
+
+  // Doc module
+  const docGeneratorAdapter = require(path.join(projectRoot, 'business_modules/doc/infrastructure/adapters/docGeneratorAdapter'));
+  const docServiceModule = require(path.join(projectRoot, 'business_modules/doc/app/docService'));
+  const docControllerModule = require(path.join(projectRoot, 'business_modules/doc/app/docController'));
+  container.register({
+    docGenerationPort: awilix.asClass(docGeneratorAdapter.DocGeneratorAdapter).singleton(),
+    docService: awilix.asClass(docServiceModule.DocService).singleton(),
+    docController: awilix.asClass(docControllerModule.DocController).singleton(),
   });
 
   return container;

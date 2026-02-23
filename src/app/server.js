@@ -67,9 +67,44 @@ async function main() {
     return c.run(request);
   });
 
+  app.decorate('c4Run', async (request, reply) => {
+    const c = container.resolve('c4Controller');
+    return c.run(request);
+  });
+  app.decorate('specRun', async (request, reply) => {
+    const c = container.resolve('specController');
+    return c.run(request);
+  });
+  app.decorate('tddRunRed', async (request, reply) => {
+    const c = container.resolve('tddController');
+    return c.runRed(request);
+  });
+  app.decorate('tddRunGreen', async (request, reply) => {
+    const c = container.resolve('tddController');
+    return c.runGreen(request);
+  });
+  app.decorate('lintRun', async (request, reply) => {
+    const c = container.resolve('lintController');
+    return c.run(request);
+  });
+  app.decorate('secureRun', async (request, reply) => {
+    const c = container.resolve('secureController');
+    return c.run(request);
+  });
+  app.decorate('docRun', async (request, reply) => {
+    const c = container.resolve('docController');
+    return c.run(request);
+  });
+
   await app.register(registerRoutes, { container });
   await app.register(require(path.join(projectRoot, 'business_modules/workflow/input/workflowRouter')));
   await app.register(require(path.join(projectRoot, 'business_modules/eventstorm/input/eventstormRouter')));
+  await app.register(require(path.join(projectRoot, 'business_modules/c4/input/c4Router')));
+  await app.register(require(path.join(projectRoot, 'business_modules/spec/input/specRouter')));
+  await app.register(require(path.join(projectRoot, 'business_modules/tdd/input/tddRouter')));
+  await app.register(require(path.join(projectRoot, 'business_modules/lint/input/lintRouter')));
+  await app.register(require(path.join(projectRoot, 'business_modules/secure/input/secureRouter')));
+  await app.register(require(path.join(projectRoot, 'business_modules/doc/input/docRouter')));
 
   await app.listen({ port: config.port, host: config.host });
 }
