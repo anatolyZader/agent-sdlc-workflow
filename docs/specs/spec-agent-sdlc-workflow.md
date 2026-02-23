@@ -27,7 +27,7 @@ This spec describes the **workflow engine** as a whole. The following business m
 - **Purpose:** Orchestrate SDLC steps in order, enforce gates, persist state, support start/resume/abort.
 - **Entities:** WorkflowRun (id, featureTitle, status, currentStep, completedSteps, createdAt, updatedAt, inputJson, planJson); WorkflowStep (name, mode, inputRefs, exitCriteria).
 - **Value objects:** RunId (string UUID or slug), StepName (eventstorm | c4 | spec | tdd_red | tdd_green | lint | secure | doc), Gate (type: fileExists | jsonValid | qualityGateGreen | testsGreen | securityNoHigh | userConfirm; params).
-- **Ports:** IStepExecutorPort — `runStep({ stepName, workflowRunId, inputs }) => Promise<{ status, artifacts, logs, metrics }>`; IWorkflowRepoPort — `save(run)`, `get(runId)`, `update(run)`; IArtifactStorePort — `store(artifact) => ref`, `get(ref)`; IClockPort — `now() => Date` (for idempotency and timeboxing).
+- **Ports:** IStepExecutorPort — `runStep({ stepName, workflowRunId, inputs }) => Promise<{ status, artifacts, logs, metrics }>`; IWorkflowPersistencePort — `save(run)`, `get(runId)`, `update(run)`; IArtifactStorePort — `store(artifact) => ref`, `get(ref)`; IClockPort — `now() => Date` (for idempotency and timeboxing).
 - **Location:** `src/business_modules/workflow/` (app: workflowService.js, stepPlanFactory.js, gates/gateRunner.js; domain: model/, ports/; infrastructure: adapters/localStepExecutor.js or httpStepExecutorAdapter.js, repo/sqliteWorkflowRepo.js, artifactStore/fsArtifactStore.js).
 
 ### Module: eventstorm
