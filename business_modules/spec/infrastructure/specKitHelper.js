@@ -2,7 +2,7 @@
 
 const fs = require('fs').promises;
 const path = require('path');
-const { runSpecifyCheck, ensureSpecifyInited } = require('./specKitCli');
+const { runSpecifyCheck, ensureSpecifyInited } = require('../../../cross-cut-modules/specKit/specKitCli');
 
 /**
  * Slug for spec-kit feature folder (e.g. "001-refund-approval").

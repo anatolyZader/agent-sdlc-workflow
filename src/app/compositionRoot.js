@@ -103,6 +103,16 @@ function createContainer() {
     specController: awilix.asClass(specControllerModule.SpecController).singleton(),
   });
 
+  // Plan module (spec-kit plan step)
+  const planSpecKitAdapter = require(path.join(projectRoot, 'business_modules/plan/infrastructure/adapters/planSpecKitAdapter'));
+  const planServiceModule = require(path.join(projectRoot, 'business_modules/plan/app/planService'));
+  const planControllerModule = require(path.join(projectRoot, 'business_modules/plan/app/planController'));
+  container.register({
+    planGenerationPort: awilix.asClass(planSpecKitAdapter.PlanSpecKitAdapter).singleton(),
+    planService: awilix.asClass(planServiceModule.PlanService).singleton(),
+    planController: awilix.asClass(planControllerModule.PlanController).singleton(),
+  });
+
   // Lint module
   const lintRunnerAdapter = require(path.join(projectRoot, 'business_modules/lint/infrastructure/adapters/lintRunnerAdapter'));
   const lintServiceModule = require(path.join(projectRoot, 'business_modules/lint/app/lintService'));

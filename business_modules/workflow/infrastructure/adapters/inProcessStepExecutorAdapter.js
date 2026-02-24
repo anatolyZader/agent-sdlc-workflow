@@ -11,6 +11,7 @@ class InProcessStepExecutorAdapter extends IWorkflowStepExecutorPort {
     eventstormController,
     c4Controller,
     specController,
+    planController,
     tddController,
     lintController,
     secureController,
@@ -22,6 +23,7 @@ class InProcessStepExecutorAdapter extends IWorkflowStepExecutorPort {
       eventstorm: eventstormController,
       c4: c4Controller,
       spec: specController,
+      plan: planController,
       tdd_red: tddController,
       tdd_green: tddController,
       lint: lintController,
@@ -79,6 +81,12 @@ class InProcessStepExecutorAdapter extends IWorkflowStepExecutorPort {
         return {
           eventstormArtifacts: artifacts.eventstorm,
           c4Artifacts: artifacts.c4,
+          featureTitle: r.featureTitle,
+          ...base,
+        };
+      case 'plan':
+        return {
+          specArtifacts: artifacts.spec,
           featureTitle: r.featureTitle,
           ...base,
         };

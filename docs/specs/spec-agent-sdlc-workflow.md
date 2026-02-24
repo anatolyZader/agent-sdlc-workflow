@@ -1,6 +1,6 @@
 # Spec: AI-Assisted SDLC Workflow Engine
 
-A GCP VM–based Fastify engine that orchestrates the AI-assisted SDLC pipeline: eventstorm → c4 → spec → tdd_red → tdd_green → lint → secure → doc, with optional budget (token/cost) policy, auth (JWT or X-Workflow-Token; JWT may be issued by an OAuth2 provider), SQLite persistence, and Awilix DI. The Cursor extension is a thin client that calls this API.
+A GCP VM–based Fastify engine that orchestrates the AI-assisted SDLC pipeline: eventstorm → c4 → spec → plan → tdd_red → tdd_green → lint → secure → doc, with optional budget (token/cost) policy, auth (JWT or X-Workflow-Token; JWT may be issued by an OAuth2 provider), SQLite persistence, and Awilix DI. The Cursor extension is a thin client that calls this API.
 
 ---
 
@@ -13,7 +13,7 @@ A GCP VM–based Fastify engine that orchestrates the AI-assisted SDLC pipeline:
   - `GET /api/workflow/:id` — get run state and artifacts; returns `{ runId, status, currentStep, completedSteps, artifacts, lastError? }`.
   - `POST /api/workflow/abort` — abort a run (body: `{ runId: string }`); returns `{ status: 'aborted' }`.
   - Step endpoints (called by orchestrator or directly by client):  
-    `POST /api/eventstorm/run`, `POST /api/c4/run`, `POST /api/spec/run`, `POST /api/tdd/red`, `POST /api/tdd/green`, `POST /api/lint/run`, `POST /api/secure/run`, `POST /api/doc/run`, `POST /api/budget/plan`.
+    `POST /api/eventstorm/run`, `POST /api/c4/run`, `POST /api/spec/run`, `POST /api/plan/run`, `POST /api/tdd/red`, `POST /api/tdd/green`, `POST /api/lint/run`, `POST /api/secure/run`, `POST /api/doc/run`, `POST /api/budget/plan`.
 - **Location:** Fastify app bootstrap in `src/app/server.js`; route registration in `src/app/routes.js`; module routers under `business_modules/<moduleName>/input/<module>Router.js`.
 
 ---
@@ -26,7 +26,7 @@ This spec describes the **workflow engine** as a whole. The following business m
 
 - **Purpose:** Orchestrate SDLC steps in order, enforce gates, persist state, support start/resume/abort.
 - **Entities:** WorkflowRun (id, featureTitle, status, currentStep, completedSteps, createdAt, updatedAt, inputJson, planJson); WorkflowStep (name, mode, inputRefs, exitCriteria).
-- **Value objects:** RunId (string UUID or slug), StepName (eventstorm | c4 | spec | tdd_red | tdd_green | lint | secure | doc), Gate (type: fileExists | jsonValid | qualityGateGreen | testsGreen | securityNoHigh | userConfirm; params).
+- **Value objects:** RunId (string UUID or slug), StepName (eventstorm | c4 | spec | plan | tdd_red | tdd_green | lint | secure | doc), Gate (type: fileExists | jsonValid | qualityGateGreen | testsGreen | securityNoHigh | userConfirm; params).
 - **Ports:** IStepExecutorPort — `runStep({ stepName, workflowRunId, inputs }) => Promise<{ status, artifacts, logs, metrics }>`; IWorkflowPersistencePort — `save(run)`, `get(runId)`, `update(run)`; IArtifactStorePort — `store(artifact) => ref`, `get(ref)`; IClockPort — `now() => Date` (for idempotency and timeboxing).
 - **Location:** `business_modules/workflow/` (app: workflowService.js, stepPlanFactory.js, gates/gateRunner.js; domain: ports/; infrastructure: adapters/inProcessStepExecutorAdapter.js, workflowSqliteAdapter.js, fsArtifactStoreAdapter.js or memoryArtifactStoreAdapter.js).
 
@@ -41,7 +41,8 @@ This spec describes the **workflow engine** as a whole. The following business m
 ### Other modules (referenced; detailed in separate specs)
 
 - **c4:** Produce C4 L1/L2/L3 diagrams and dependency rules from eventstorm output.
-- **spec:** Generate SpecMD from domain slice (eventstorm/c4).
+- **spec:** Generate SpecMD from domain slice (eventstorm/c4); uses spec-kit CLI (check, optional init, template) when USE_SPEC_KIT_PACKAGE=1.
+- **plan:** Generate implementation plan from spec via spec-kit CLI (specify plan); uses same spec-kit config (check, optional init).
 - **tdd:** Red/green phases; ensure module scaffold; run tests-from-spec.
 - **lint:** ESLint, Prettier, tests, SonarCloud gate.
 - **secure:** npm audit, static analysis, secrets check.
@@ -96,7 +97,7 @@ Every step returns a deterministic envelope: `{ status: 'ok'|'failed'|'needs_inp
 
 ## Invariants
 
-- Steps run in fixed order: eventstorm → c4 → spec → tdd_red → (manual commit) → tdd_green → lint → secure → doc.
+- Steps run in fixed order: eventstorm → c4 → spec → plan → tdd_red → (manual commit) → tdd_green → lint → secure → doc.
 - Workflow never skips quality gates; budget cannot disable gates (fail-closed).
 - TDD: red phase must be confirmed (tests written and failing for the right reason) before green phase runs.
 - At most one running workflow per runId; resume is idempotent for already-completed runs (returns current state).
@@ -107,7 +108,7 @@ Every step returns a deterministic envelope: `{ status: 'ok'|'failed'|'needs_inp
 ## Success criteria
 
 - Workflow run can be started, persisted, and resumed; state is stored in SQLite (workflow_runs, workflow_artifacts, workflow_events).
-- Pipeline runs in order: eventstorm → c4 → spec → tdd → lint → secure → doc; each step returns the standard result envelope.
+- Pipeline runs in order: eventstorm → c4 → spec → plan → tdd → lint → secure → doc; each step returns the standard result envelope.
 - Gates are enforced (e.g. eventstorm output valid JSON with required keys; tdd_red requires user commit before tdd_green).
 - Eventstorm step returns EventstormResult with at least: domainEvents, commands, aggregates, boundedContexts, openQuestions, mermaid.
 - API is callable by the Cursor extension (HTTP); auth via JWT or X-Workflow-Token for local/dev.

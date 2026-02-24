@@ -7,9 +7,9 @@ const fs = require('fs').promises;
 const SPEC_KIT_GIT = 'git+https://github.com/github/spec-kit.git';
 
 /**
- * Run a spec-kit CLI command.
+ * Run a spec-kit CLI command. Shared by spec and plan modules.
  * Env: SPECIFY_CLI_PATH (explicit executable); USE_SPECIFY_UVX=0 to use `specify` on PATH.
- * @param {string[]} args - e.g. ['check'] or ['init', '.', '--force', '--ignore-agent-tools']
+ * @param {string[]} args - e.g. ['check'], ['init', '.', '--force', '--ignore-agent-tools'], ['plan', '.']
  * @param {string} cwd - working directory (project root)
  * @param {object} [env] - optional env overrides
  * @returns {Promise<{ ok: boolean, stdout: string, stderr: string, code: number | null }>}
@@ -54,17 +54,14 @@ function runSpecify(args, cwd, env = {}) {
 }
 
 /**
- * Run `specify check`. Fails if spec-kit is not installed or project not inited (depending on check behavior).
+ * Run `specify check`.
  */
 async function runSpecifyCheck(projectRoot) {
-  const result = await runSpecify(['check'], projectRoot);
-  return result;
+  return runSpecify(['check'], projectRoot);
 }
 
 /**
  * Ensure .specify exists; if not, run `specify init . --force --ignore-agent-tools`.
- * @param {string} projectRoot
- * @returns {Promise<{ ok: boolean, message?: string }>}
  */
 async function ensureSpecifyInited(projectRoot) {
   const specifyDir = path.join(projectRoot, '.specify');
@@ -84,8 +81,20 @@ async function ensureSpecifyInited(projectRoot) {
   return { ok: true };
 }
 
+/**
+ * Run `specify plan` for the project (generates plan from .specify/specs). May not exist in all spec-kit versions.
+ * @param {string} projectRoot
+ * @param {string} [slug] - optional spec slug (e.g. 001-feature-name) if CLI supports it
+ * @returns {Promise<{ ok: boolean, stdout: string, stderr: string, code: number | null }>}
+ */
+async function runSpecifyPlan(projectRoot, slug) {
+  const args = slug ? ['plan', '.', '--spec', slug] : ['plan', '.'];
+  return runSpecify(args, projectRoot);
+}
+
 module.exports = {
   runSpecify,
   runSpecifyCheck,
   ensureSpecifyInited,
+  runSpecifyPlan,
 };
