@@ -11,6 +11,7 @@ class SpecController {
       eventstormArtifacts: body.eventstormArtifacts,
       c4Artifacts: body.c4Artifacts,
       workflowRunId: body.workflowRunId,
+      featureTitle: body.featureTitle,
       ...body,
     });
   }

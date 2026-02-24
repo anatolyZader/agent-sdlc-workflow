@@ -28,5 +28,23 @@ describe('gateRunner', () => {
       const result = await runGate({ type: 'jsonValid', params: {} }, { runId: 'wf-1', artifacts: [] });
       assert.strictEqual(typeof result.passed, 'boolean');
     });
+
+    it('returns passed: true for requiredKeys when payload has all keys', async () => {
+      const result = await runGate(
+        { type: 'requiredKeys', params: { keys: ['domainEvents', 'mermaid'] } },
+        { jsonPayload: { domainEvents: [], mermaid: 'graph' } }
+      );
+      assert.strictEqual(result.passed, true);
+    });
+
+    it('returns passed: false for requiredKeys when payload missing keys', async () => {
+      const result = await runGate(
+        { type: 'requiredKeys', params: { keys: ['domainEvents', 'mermaid'] } },
+        { jsonPayload: { domainEvents: [] } }
+      );
+      assert.strictEqual(result.passed, false);
+      assert.ok(result.message.includes('domainEvents') === false);
+      assert.ok(result.message.includes('mermaid'));
+    });
   });
 });

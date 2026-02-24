@@ -1,18 +1,19 @@
 'use strict';
 
 class TddController {
-  constructor(tddService) {
+  constructor({ tddService }) {
     this.tddService = tddService;
   }
 
-  async runRed(request) {
+  async run(request) {
     const body = request.body || {};
-    return this.tddService.runRed({ workflowRunId: body.workflowRunId, specArtifacts: body.specArtifacts, ...body });
-  }
-
-  async runGreen(request) {
-    const body = request.body || {};
-    return this.tddService.runGreen({ workflowRunId: body.workflowRunId, specArtifacts: body.specArtifacts, ...body });
+    return this.tddService.run({
+      phase: body.phase || 'red',
+      workflowRunId: body.workflowRunId,
+      specArtifacts: body.specArtifacts,
+      eventstormArtifacts: body.eventstormArtifacts,
+      ...body,
+    });
   }
 }
 

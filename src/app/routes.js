@@ -31,12 +31,22 @@ async function registerRoutes(app, options) {
     if (!config.workflowToken) return;
 
     const headerToken = request.headers['x-workflow-token'];
-    if (headerToken === config.workflowToken) return;
+    if (headerToken === config.workflowToken) {
+      if (request.headers['x-workflow-scope'] === 'read_only' && request.method === 'POST' && (request.url.includes('/api/workflow/start') || request.url.includes('/api/workflow/abort'))) {
+        reply.code(403);
+        return reply.send({ error: 'Forbidden' });
+      }
+      return;
+    }
 
     const authHeader = request.headers.authorization;
     if (authHeader && authHeader.startsWith('Bearer ')) {
       try {
         await request.jwtVerify();
+        if (request.headers['x-workflow-scope'] === 'read_only' && request.method === 'POST' && (request.url.includes('/api/workflow/start') || request.url.includes('/api/workflow/abort'))) {
+          reply.code(403);
+          return reply.send({ error: 'Forbidden' });
+        }
         return;
       } catch {
         reply.code(401);

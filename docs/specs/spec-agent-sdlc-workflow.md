@@ -1,6 +1,6 @@
 # Spec: AI-Assisted SDLC Workflow Engine
 
-A GCP VM–based Fastify engine that orchestrates the AI-assisted SDLC pipeline: eventstorm → c4 → spec → tdd → lint → secure → doc, with optional budget (token/cost) policy, OAuth2 auth, SQLite persistence, and Awilix DI. The Cursor extension is a thin client that calls this API.
+A GCP VM–based Fastify engine that orchestrates the AI-assisted SDLC pipeline: eventstorm → c4 → spec → tdd_red → tdd_green → lint → secure → doc, with optional budget (token/cost) policy, auth (JWT or X-Workflow-Token; JWT may be issued by an OAuth2 provider), SQLite persistence, and Awilix DI. The Cursor extension is a thin client that calls this API.
 
 ---
 
@@ -14,7 +14,7 @@ A GCP VM–based Fastify engine that orchestrates the AI-assisted SDLC pipeline:
   - `POST /api/workflow/abort` — abort a run (body: `{ runId: string }`); returns `{ status: 'aborted' }`.
   - Step endpoints (called by orchestrator or directly by client):  
     `POST /api/eventstorm/run`, `POST /api/c4/run`, `POST /api/spec/run`, `POST /api/tdd/red`, `POST /api/tdd/green`, `POST /api/lint/run`, `POST /api/secure/run`, `POST /api/doc/run`, `POST /api/budget/plan`.
-- **Location:** Fastify app bootstrap in `src/app/server.js`; route registration in `src/app/routes.js`; module routers under `src/business_modules/<moduleName>/input/<module>Router.js`.
+- **Location:** Fastify app bootstrap in `src/app/server.js`; route registration in `src/app/routes.js`; module routers under `business_modules/<moduleName>/input/<module>Router.js`.
 
 ---
 
@@ -28,7 +28,7 @@ This spec describes the **workflow engine** as a whole. The following business m
 - **Entities:** WorkflowRun (id, featureTitle, status, currentStep, completedSteps, createdAt, updatedAt, inputJson, planJson); WorkflowStep (name, mode, inputRefs, exitCriteria).
 - **Value objects:** RunId (string UUID or slug), StepName (eventstorm | c4 | spec | tdd_red | tdd_green | lint | secure | doc), Gate (type: fileExists | jsonValid | qualityGateGreen | testsGreen | securityNoHigh | userConfirm; params).
 - **Ports:** IStepExecutorPort — `runStep({ stepName, workflowRunId, inputs }) => Promise<{ status, artifacts, logs, metrics }>`; IWorkflowPersistencePort — `save(run)`, `get(runId)`, `update(run)`; IArtifactStorePort — `store(artifact) => ref`, `get(ref)`; IClockPort — `now() => Date` (for idempotency and timeboxing).
-- **Location:** `src/business_modules/workflow/` (app: workflowService.js, stepPlanFactory.js, gates/gateRunner.js; domain: model/, ports/; infrastructure: adapters/localStepExecutor.js or httpStepExecutorAdapter.js, repo/sqliteWorkflowRepo.js, artifactStore/fsArtifactStore.js).
+- **Location:** `business_modules/workflow/` (app: workflowService.js, stepPlanFactory.js, gates/gateRunner.js; domain: ports/; infrastructure: adapters/inProcessStepExecutorAdapter.js, workflowSqliteAdapter.js, fsArtifactStoreAdapter.js or memoryArtifactStoreAdapter.js).
 
 ### Module: eventstorm
 
@@ -36,7 +36,7 @@ This spec describes the **workflow engine** as a whole. The following business m
 - **Entities:** None (stateless run).
 - **Value objects:** EventstormRequest (domainName, problemStatement, constraints?, timeboxMinutes?, contextSnippets?); EventstormResult (ubiquitousLanguage[], domainEvents[], commands[], policies[], aggregates[], boundedContexts[], openQuestions[], mermaid: { eventStorm, contextMap }).
 - **Ports:** IEventstormFacilitationPort — `runSession(request: EventstormRequest) => Promise<EventstormResult>`; IEventstormSessionRepo (optional) — save/get/appendProgress for async or audit.
-- **Location:** `src/business_modules/eventstorm/` (app: eventstormService.js; domain: model/, ports/; infrastructure: adapters/claudeCodeEventstormAdapter.js implementing IEventstormFacilitationPort).
+- **Location:** `business_modules/eventstorm/` (app: eventstormService.js; domain: ports/; infrastructure: adapters/claudeCodeEventstormAdapter.js implementing IEventstormFacilitationPort).
 
 ### Other modules (referenced; detailed in separate specs)
 

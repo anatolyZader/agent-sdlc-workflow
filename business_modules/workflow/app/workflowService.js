@@ -1,13 +1,17 @@
 'use strict';
 
 const { buildDefaultStepPlan } = require('./stepPlanFactory');
+const { runGate } = require('./gates/gateRunner');
+
+const MAX_STEP_RETRIES_DEFAULT = 2;
 
 class WorkflowService {
-  constructor(workflowRepo, stepExecutor, artifactStore, clock) {
+  constructor({ workflowRepo, stepExecutor, artifactStore, clock, config }) {
     this.workflowRepo = workflowRepo;
     this.stepExecutor = stepExecutor;
     this.artifactStore = artifactStore;
     this.clock = clock;
+    this.config = config || {};
   }
 
   async startWorkflow(input) {
@@ -15,8 +19,13 @@ class WorkflowService {
     if (featureTitle === undefined || featureTitle === null || String(featureTitle).trim() === '') {
       throw new Error('Invalid or missing featureTitle');
     }
+    const budgetProfile = input?.options?.budgetProfile;
+    if (budgetProfile !== undefined && !['low', 'medium', 'high'].includes(budgetProfile)) {
+      throw new Error('Invalid options.budgetProfile; must be low, medium, or high');
+    }
     const runId = `wf-${this.clock.now().getTime()}-${Math.random().toString(36).slice(2, 9)}`;
     const now = this.clock.now();
+    const planJson = buildDefaultStepPlan();
     const run = {
       id: runId,
       featureTitle: String(featureTitle).trim(),
@@ -24,6 +33,8 @@ class WorkflowService {
       currentStep: 'eventstorm',
       completedSteps: [],
       artifacts: {},
+      currentStepRetries: 0,
+      planJson,
       createdAt: now,
       updatedAt: now,
       inputJson: input,
@@ -45,7 +56,7 @@ class WorkflowService {
         artifacts: run.artifacts || {},
       };
     }
-    const plan = buildDefaultStepPlan();
+    const plan = run.planJson && run.planJson.length ? run.planJson : buildDefaultStepPlan();
     const currentIndex = plan.findIndex((s) => s.name === run.currentStep);
     if (currentIndex < 0) {
       return {
@@ -70,16 +81,77 @@ class WorkflowService {
         artifacts: run.artifacts || {},
       };
     }
-    const result = await this.stepExecutor.runStep({
+    let result = await this.stepExecutor.runStep({
       stepName: run.currentStep,
       workflowRunId: run.id,
       inputs: { run, plan },
     });
+    if (result.status === 'ok' && step.exitCriteria?.length) {
+      const context = {
+        runId: run.id,
+        stepName: run.currentStep,
+        artifacts: run.artifacts || {},
+        jsonPayload: result.rawResult,
+      };
+      for (const gate of step.exitCriteria) {
+        const gateResult = await runGate(gate, context);
+        if (!gateResult.passed) {
+          result = {
+            status: 'failed',
+            artifacts: result.artifacts || [],
+            metrics: result.metrics || {},
+            errors: [gateResult.message || 'Gate failed'],
+          };
+          break;
+        }
+      }
+    }
     const artifacts = { ...(run.artifacts || {}) };
     if (result.artifacts?.length) {
       for (const a of result.artifacts) {
         if (a.type) artifacts[a.type] = a.path ?? a;
       }
+    }
+    const now = this.clock.now();
+    const maxRetries = this.config.maxStepRetries ?? MAX_STEP_RETRIES_DEFAULT;
+    const currentRetries = run.currentStepRetries ?? 0;
+
+    if (result.status === 'failed') {
+      if (currentRetries < maxRetries) {
+        const updated = {
+          ...run,
+          currentStepRetries: currentRetries + 1,
+          artifacts,
+          lastError: result.errors?.[0] || 'Step failed',
+          updatedAt: now,
+        };
+        await this.workflowRepo.update(updated);
+        return {
+          status: 'running',
+          currentStep: run.currentStep,
+          completedSteps: run.completedSteps || [],
+          artifacts: updated.artifacts,
+          lastError: updated.lastError,
+        };
+      }
+      const updated = {
+        ...run,
+        status: 'failed',
+        currentStep: run.currentStep,
+        completedSteps: run.completedSteps || [],
+        artifacts,
+        lastError: result.errors?.[0] || 'Step failed',
+        currentStepRetries: currentRetries,
+        updatedAt: now,
+      };
+      await this.workflowRepo.update(updated);
+      return {
+        status: 'failed',
+        currentStep: updated.currentStep,
+        completedSteps: updated.completedSteps,
+        artifacts: updated.artifacts,
+        lastError: updated.lastError,
+      };
     }
     const completedSteps = [...(run.completedSteps || []), run.currentStep];
     const nextIndex = currentIndex + 1;
@@ -90,8 +162,9 @@ class WorkflowService {
       artifacts,
       currentStep: nextStep ? nextStep.name : null,
       status: nextStep ? 'running' : 'completed',
-      lastError: result.status === 'failed' ? (result.errors?.[0] || 'Step failed') : undefined,
-      updatedAt: this.clock.now(),
+      lastError: undefined,
+      currentStepRetries: 0,
+      updatedAt: now,
     };
     await this.workflowRepo.update(updated);
     return {
@@ -112,6 +185,7 @@ class WorkflowService {
       completedSteps: run.completedSteps || [],
       artifacts: run.artifacts || {},
       lastError: run.lastError,
+      planJson: run.planJson,
     };
   }
 

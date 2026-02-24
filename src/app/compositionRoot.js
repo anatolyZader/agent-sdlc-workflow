@@ -32,14 +32,19 @@ function createContainer() {
       workflowToken: process.env.WORKFLOW_TOKEN,
       databasePath: process.env.DATABASE_PATH || ':memory:',
       projectRoot,
+      stepTimeoutMs: parseInt(process.env.STEP_TIMEOUT_MS || '300000', 10),
+      maxStepRetries: parseInt(process.env.MAX_STEP_RETRIES || '2', 10),
+      artifactStorePath: process.env.ARTIFACT_STORE_PATH,
+      useSpecKitPackage: process.env.USE_SPEC_KIT_PACKAGE === '1' || process.env.USE_SPEC_KIT_PACKAGE === 'true',
+      specifyAutoInit: process.env.SPECIFY_AUTO_INIT === '1' || process.env.SPECIFY_AUTO_INIT === 'true',
     }),
   });
 
   // Workflow module: SQLite when DATABASE_PATH is set, else in-memory
   const fileWorkflowRepo = require(path.join(projectRoot, 'business_modules/workflow/infrastructure/adapters/fileWorkflowRepoAdapter'));
   const workflowSqliteAdapter = require(path.join(projectRoot, 'business_modules/workflow/infrastructure/adapters/workflowSqliteAdapter'));
-  const httpStepExecutor = require(path.join(projectRoot, 'business_modules/workflow/infrastructure/adapters/httpStepExecutorAdapter'));
   const memoryArtifactStore = require(path.join(projectRoot, 'business_modules/workflow/infrastructure/adapters/memoryArtifactStoreAdapter'));
+  const fsArtifactStore = require(path.join(projectRoot, 'business_modules/workflow/infrastructure/adapters/fsArtifactStoreAdapter'));
   const systemClock = require(path.join(projectRoot, 'business_modules/workflow/infrastructure/adapters/systemClockAdapter'));
   const workflowServiceModule = require(path.join(projectRoot, 'business_modules/workflow/app/workflowService'));
   const workflowControllerModule = require(path.join(projectRoot, 'business_modules/workflow/app/workflowController'));
@@ -54,10 +59,17 @@ function createContainer() {
       runMigrationsOn(db);
       return new workflowSqliteAdapter.WorkflowSqliteAdapter({ database: db });
     }).singleton(),
-    stepExecutor: awilix.asClass(httpStepExecutor.HttpStepExecutorAdapter).singleton(),
-    artifactStore: awilix.asClass(memoryArtifactStore.MemoryArtifactStoreAdapter).singleton(),
+    artifactStore: awilix.asFunction(({ config }) => {
+      if (config.artifactStorePath) {
+        return new fsArtifactStore.FsArtifactStoreAdapter({ basePath: config.artifactStorePath });
+      }
+      return new memoryArtifactStore.MemoryArtifactStoreAdapter();
+    }).singleton(),
     clock: awilix.asClass(systemClock.SystemClockAdapter).singleton(),
-    workflowService: awilix.asClass(workflowServiceModule.WorkflowService).singleton(),
+    workflowService: awilix.asFunction(
+      ({ workflowRepo, stepExecutor, artifactStore, clock, config }) =>
+        new workflowServiceModule.WorkflowService({ workflowRepo, stepExecutor, artifactStore, clock, config })
+    ).singleton(),
     workflowController: awilix.asClass(workflowControllerModule.WorkflowController).singleton(),
   });
 
@@ -91,22 +103,6 @@ function createContainer() {
     specController: awilix.asClass(specControllerModule.SpecController).singleton(),
   });
 
-  // Tdd module
-  const tddRunnerAdapter = require(path.join(projectRoot, 'business_modules/tdd/infrastructure/adapters/tddRunnerAdapter'));
-  const tddModuleScaffoldAdapter = require(path.join(projectRoot, 'business_modules/tdd/infrastructure/adapters/tddModuleScaffoldAdapter'));
-  const tddTestGeneratorAdapter = require(path.join(projectRoot, 'business_modules/tdd/infrastructure/adapters/tddTestGeneratorAdapter'));
-  const tddTestRunnerAdapter = require(path.join(projectRoot, 'business_modules/tdd/infrastructure/adapters/tddTestRunnerAdapter'));
-  const tddServiceModule = require(path.join(projectRoot, 'business_modules/tdd/app/tddService'));
-  const tddControllerModule = require(path.join(projectRoot, 'business_modules/tdd/app/tddController'));
-  container.register({
-    tddModuleScaffoldPort: awilix.asClass(tddModuleScaffoldAdapter.TddModuleScaffoldAdapter).singleton(),
-    tddTestGeneratorPort: awilix.asClass(tddTestGeneratorAdapter.TddTestGeneratorAdapter).singleton(),
-    tddTestRunnerPort: awilix.asClass(tddTestRunnerAdapter.TddTestRunnerAdapter).singleton(),
-    tddRunPort: awilix.asClass(tddRunnerAdapter.TddRunnerAdapter).singleton(),
-    tddService: awilix.asClass(tddServiceModule.TddService).singleton(),
-    tddController: awilix.asClass(tddControllerModule.TddController).singleton(),
-  });
-
   // Lint module
   const lintRunnerAdapter = require(path.join(projectRoot, 'business_modules/lint/infrastructure/adapters/lintRunnerAdapter'));
   const lintServiceModule = require(path.join(projectRoot, 'business_modules/lint/app/lintService'));
@@ -135,6 +131,32 @@ function createContainer() {
     docGenerationPort: awilix.asClass(docGeneratorAdapter.DocGeneratorAdapter).singleton(),
     docService: awilix.asClass(docServiceModule.DocService).singleton(),
     docController: awilix.asClass(docControllerModule.DocController).singleton(),
+  });
+
+  // TDD module
+  const tddRunAdapter = require(path.join(projectRoot, 'business_modules/tdd/infrastructure/adapters/tddRunAdapter'));
+  const tddServiceModule = require(path.join(projectRoot, 'business_modules/tdd/app/tddService'));
+  const tddControllerModule = require(path.join(projectRoot, 'business_modules/tdd/app/tddController'));
+  container.register({
+    tddRunPort: awilix.asClass(tddRunAdapter.TddRunAdapter).singleton(),
+    tddService: awilix.asClass(tddServiceModule.TddService).singleton(),
+    tddController: awilix.asClass(tddControllerModule.TddController).singleton(),
+  });
+
+  // Budget module
+  const budgetPlanAdapter = require(path.join(projectRoot, 'business_modules/budget/infrastructure/adapters/budgetPlanAdapter'));
+  const budgetServiceModule = require(path.join(projectRoot, 'business_modules/budget/app/budgetService'));
+  const budgetControllerModule = require(path.join(projectRoot, 'business_modules/budget/app/budgetController'));
+  container.register({
+    budgetPlanPort: awilix.asClass(budgetPlanAdapter.BudgetPlanAdapter).singleton(),
+    budgetService: awilix.asClass(budgetServiceModule.BudgetService).singleton(),
+    budgetController: awilix.asClass(budgetControllerModule.BudgetController).singleton(),
+  });
+
+  // Step executor: run workflow steps in-process (after all step controllers are registered)
+  const inProcessStepExecutor = require(path.join(projectRoot, 'business_modules/workflow/infrastructure/adapters/inProcessStepExecutorAdapter'));
+  container.register({
+    stepExecutor: awilix.asClass(inProcessStepExecutor.InProcessStepExecutorAdapter).singleton(),
   });
 
   return container;

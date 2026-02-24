@@ -1,17 +1,7 @@
 'use strict';
 
 class TddService {
-  constructor(tddRunPort) {
-    this.tddRunPort = tddRunPort;
-  }
-
-  async runRed(inputs) {
-    return this.tddRunPort.runRed(inputs);
-  }
-
-  async runGreen(inputs) {
-    return this.tddRunPort.runGreen(inputs);
-  }
+  constructor({ tddRunPort }) { this.tddRunPort = tddRunPort; }
+  async run(inputs) { return this.tddRunPort.run(inputs); }
 }
-
 module.exports = { TddService };

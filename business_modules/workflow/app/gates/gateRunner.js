@@ -41,6 +41,38 @@ async function runGate(gate, context) {
         return { passed: false, message: 'Invalid JSON' };
       }
     }
+    case 'requiredKeys': {
+      const payload = context?.jsonPayload;
+      const keys = gate.params?.keys;
+      if (!Array.isArray(keys) || keys.length === 0) {
+        return { passed: false, message: 'Missing keys to check' };
+      }
+      if (payload === undefined || payload === null) {
+        return { passed: false, message: 'No payload to validate' };
+      }
+      const obj = typeof payload === 'object' ? payload : {};
+      const missing = keys.filter((k) => !(k in obj));
+      if (missing.length > 0) {
+        return { passed: false, message: `Missing required keys: ${missing.join(', ')}` };
+      }
+      return { passed: true };
+    }
+    case 'qualityGateGreen':
+      return context?.artifacts?.lintPassed === true
+        ? { passed: true }
+        : { passed: false, message: 'Lint/quality gate not green' };
+    case 'testsGreen':
+      return context?.artifacts?.testsPassed === true
+        ? { passed: true }
+        : { passed: false, message: 'Tests not green' };
+    case 'securityNoHigh': {
+      const highCount = context?.artifacts?.highSeverityCount ?? context?.artifacts?.highFindings ?? 0;
+      return highCount === 0 ? { passed: true } : { passed: false, message: 'Security gate: high severity findings present' };
+    }
+    case 'userConfirm':
+      return context?.userConfirmed === true
+        ? { passed: true }
+        : { passed: false, message: 'User confirmation required' };
     default:
       return { passed: false, message: `Unknown gate type: ${gate.type}` };
   }

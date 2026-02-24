@@ -13,18 +13,19 @@ try {
   Fastify = null;
 }
 
-const baseUrl = 'http://127.0.0.1:8788';
+let baseUrl = 'http://127.0.0.1:8788';
 
-function request(method, path, body) {
+function request(method, path, body, opts = {}) {
+  const { baseUrl: bu, headers: extraHeaders = {} } = opts;
+  const url = new URL(path, bu || baseUrl);
   return new Promise((resolve, reject) => {
-    const url = new URL(path, baseUrl);
     const req = http.request(
       {
         method,
         hostname: url.hostname,
         port: url.port,
         path: url.pathname + url.search,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...extraHeaders },
       },
       (res) => {
         let data = '';
@@ -52,7 +53,9 @@ describe('Workflow API', { skip: !Fastify }, () => {
     const { createContainer } = require(path.join(projectRoot, 'src/app/compositionRoot'));
     const registerRoutes = require(path.join(projectRoot, 'src/app/routes'));
     const container = createContainer();
+    const config = container.resolve('config');
     const app = Fastify({ logger: false });
+    await app.register(require('@fastify/jwt'), { secret: config.jwtSecret });
     app.decorate('workflowStart', async (req, reply) => {
       const c = container.resolve('workflowController');
       return c.start(req);
@@ -76,7 +79,13 @@ describe('Workflow API', { skip: !Fastify }, () => {
     });
     await app.register(registerRoutes, { container });
     await app.register(require(path.join(projectRoot, 'business_modules/workflow/input/workflowRouter')));
-    server = await app.listen({ port: 8788, host: '127.0.0.1' });
+    const address = await app.listen({ port: 0, host: '127.0.0.1' });
+    server = app;
+    if (typeof address === 'string') {
+      baseUrl = address.startsWith('http') ? address : `http://${address}`;
+    } else {
+      baseUrl = `http://127.0.0.1:${address.port}`;
+    }
   });
 
   after(async () => {
@@ -100,5 +109,62 @@ describe('Workflow API', { skip: !Fastify }, () => {
     const { status, body } = await request('POST', '/api/workflow/abort', { runId: 'wf-1' });
     assert.strictEqual(status, 200);
     assert.strictEqual(body.status, 'aborted');
+  });
+
+  describe('403 when scope is read_only', () => {
+    let authBaseUrl;
+    let authServer;
+    const testToken = 'test-workflow-token-403';
+
+    before(async () => {
+      const prev = process.env.WORKFLOW_TOKEN;
+      process.env.WORKFLOW_TOKEN = testToken;
+      const pathModule = require('path');
+      const { createContainer } = require(path.join(projectRoot, 'src/app/compositionRoot'));
+      const registerRoutes = require(path.join(projectRoot, 'src/app/routes'));
+      const container = createContainer();
+      const config = container.resolve('config');
+      const app = Fastify({ logger: false });
+      await app.register(require('@fastify/jwt'), { secret: config.jwtSecret });
+      app.decorate('workflowStart', async (req, reply) => {
+        const c = container.resolve('workflowController');
+        return c.start(req);
+      });
+      app.decorate('workflowResume', async (req, reply) => {
+        const c = container.resolve('workflowController');
+        return c.resume(req);
+      });
+      app.decorate('workflowGet', async (req, reply) => {
+        const c = container.resolve('workflowController');
+        const result = await c.get(req);
+        if (result === null) {
+          reply.code(404);
+          return { error: 'Not found' };
+        }
+        return result;
+      });
+      app.decorate('workflowAbort', async (req, reply) => {
+        const c = container.resolve('workflowController');
+        return c.abort(req);
+      });
+      await app.register(registerRoutes, { container });
+      await app.register(require(path.join(projectRoot, 'business_modules/workflow/input/workflowRouter')));
+      const address = await app.listen({ port: 0, host: '127.0.0.1' });
+      authServer = app;
+      authBaseUrl = typeof address === 'string' ? (address.startsWith('http') ? address : `http://${address}`) : `http://127.0.0.1:${address.port}`;
+      process.env.WORKFLOW_TOKEN = prev;
+    });
+
+    after(async () => {
+      if (authServer) await authServer.close();
+    });
+
+    it('POST /api/workflow/start with valid token and X-Workflow-Scope read_only returns 403', async () => {
+      const { status } = await request('POST', '/api/workflow/start', { featureTitle: 'x' }, {
+        baseUrl: authBaseUrl,
+        headers: { 'x-workflow-token': testToken, 'x-workflow-scope': 'read_only' },
+      });
+      assert.strictEqual(status, 403);
+    });
   });
 });

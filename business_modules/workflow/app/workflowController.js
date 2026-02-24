@@ -1,7 +1,7 @@
 'use strict';
 
 class WorkflowController {
-  constructor(workflowService) {
+  constructor({ workflowService }) {
     this.workflowService = workflowService;
   }
 

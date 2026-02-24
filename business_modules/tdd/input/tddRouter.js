@@ -6,35 +6,20 @@ module.exports = fp(async function tddRouter(fastify, opts) {
   fastify.route({
     method: 'POST',
     url: '/api/tdd/red',
-    handler: fastify.tddRunRed,
+    handler: fastify.tddRed,
     schema: {
       tags: ['tdd'],
-      body: {
-        type: 'object',
-        properties: {
-          workflowRunId: { type: 'string' },
-          specArtifacts: { type: 'object' },
-        },
-        additionalProperties: true,
-      },
+      body: { type: 'object', properties: { workflowRunId: { type: 'string' }, specArtifacts: { type: 'object' } }, additionalProperties: true },
       response: { 200: { type: 'object', additionalProperties: true } },
     },
   });
-
   fastify.route({
     method: 'POST',
     url: '/api/tdd/green',
-    handler: fastify.tddRunGreen,
+    handler: fastify.tddGreen,
     schema: {
       tags: ['tdd'],
-      body: {
-        type: 'object',
-        properties: {
-          workflowRunId: { type: 'string' },
-          specArtifacts: { type: 'object' },
-        },
-        additionalProperties: true,
-      },
+      body: { type: 'object', properties: { workflowRunId: { type: 'string' }, specArtifacts: { type: 'object' } }, additionalProperties: true },
       response: { 200: { type: 'object', additionalProperties: true } },
     },
   });

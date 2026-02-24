@@ -21,7 +21,7 @@ async function main() {
       const result = await c.start(request);
       return result;
     } catch (err) {
-      if (/invalid or missing featureTitle/i.test(err.message)) {
+      if (/invalid or missing featureTitle/i.test(err.message) || /invalid options\.budgetProfile/i.test(err.message)) {
         reply.code(400);
         return { error: err.message };
       }
@@ -75,14 +75,6 @@ async function main() {
     const c = container.resolve('specController');
     return c.run(request);
   });
-  app.decorate('tddRunRed', async (request, reply) => {
-    const c = container.resolve('tddController');
-    return c.runRed(request);
-  });
-  app.decorate('tddRunGreen', async (request, reply) => {
-    const c = container.resolve('tddController');
-    return c.runGreen(request);
-  });
   app.decorate('lintRun', async (request, reply) => {
     const c = container.resolve('lintController');
     return c.run(request);
@@ -96,6 +88,20 @@ async function main() {
     return c.run(request);
   });
 
+  app.decorate('budgetPlan', async (request, reply) => {
+    const c = container.resolve('budgetController');
+    return c.plan(request);
+  });
+
+  app.decorate('tddRed', async (request, reply) => {
+    const c = container.resolve('tddController');
+    return c.run({ ...request, body: { ...(request.body || {}), phase: 'red' } });
+  });
+  app.decorate('tddGreen', async (request, reply) => {
+    const c = container.resolve('tddController');
+    return c.run({ ...request, body: { ...(request.body || {}), phase: 'green' } });
+  });
+
   await app.register(registerRoutes, { container });
   await app.register(require(path.join(projectRoot, 'business_modules/workflow/input/workflowRouter')));
   await app.register(require(path.join(projectRoot, 'business_modules/eventstorm/input/eventstormRouter')));
@@ -105,6 +111,7 @@ async function main() {
   await app.register(require(path.join(projectRoot, 'business_modules/lint/input/lintRouter')));
   await app.register(require(path.join(projectRoot, 'business_modules/secure/input/secureRouter')));
   await app.register(require(path.join(projectRoot, 'business_modules/doc/input/docRouter')));
+  await app.register(require(path.join(projectRoot, 'business_modules/budget/input/budgetRouter')));
 
   await app.listen({ port: config.port, host: config.host });
 }
