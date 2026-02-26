@@ -11,8 +11,9 @@ module.exports = fp(async function eventstormRouter(fastify, opts) {
       tags: ['eventstorm'],
       body: {
         type: 'object',
-        required: ['domainName', 'problemStatement'],
         properties: {
+          rawText: { type: 'string' },
+          sessionId: { type: 'string' },
           domainName: { type: 'string', minLength: 1 },
           problemStatement: { type: 'string', minLength: 1 },
           constraints: { type: 'array', items: { type: 'string' } },

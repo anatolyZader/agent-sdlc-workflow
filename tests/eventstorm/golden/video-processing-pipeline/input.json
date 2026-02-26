@@ -1,0 +1,8 @@
+{
+  "domainName": "Media",
+  "problemStatement": "Video uploads must be transcoded, then made available for streaming. Failures should retry with backoff.",
+  "constraints": [
+    "Max file size 2GB",
+    "Support at least H.264 and WebM"
+  ]
+}

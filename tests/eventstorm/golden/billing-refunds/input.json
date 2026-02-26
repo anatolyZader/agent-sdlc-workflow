@@ -1,0 +1,8 @@
+{
+  "domainName": "Billing",
+  "problemStatement": "Refunds are confusing and inconsistent.",
+  "constraints": [
+    "Must integrate with Stripe",
+    "Refunds cannot exceed original charge"
+  ]
+}

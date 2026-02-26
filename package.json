@@ -7,21 +7,24 @@
     "start": "node src/app/server.js",
     "dev": "node --watch src/app/server.js",
     "test": "node --test tests/business_modules/workflow/app/workflowService.test.js tests/business_modules/eventstorm/app/eventstormService.test.js tests/business_modules/workflow/app/gates/gateRunner.test.js tests/integration/workflow-api.test.js",
+    "test:eventstorm": "node --test tests/eventstorm/eventstorm.eval.test.js && node tests/eventstorm/runGoldenCases.js",
+    "test:eventstorm:cli": "RUN_EVENTSTORM_CLI=1 node tests/eventstorm/runGoldenCases.js",
     "migrate": "node src/cross-cut-modules/persistence/runMigrations.js"
   },
   "engines": {
     "node": ">=20.0.0"
   },
   "dependencies": {
+    "@fastify/jwt": "^9.0.0",
+    "@fastify/oauth2": "^6.0.0",
     "awilix": "^10.0.0",
     "better-sqlite3": "^11.0.0",
     "fastify": "^5.0.0",
-    "@fastify/jwt": "^9.0.0",
-    "@fastify/oauth2": "^6.0.0",
     "pino": "^9.0.0",
     "pino-pretty": "^11.0.0"
   },
   "devDependencies": {
+    "ajv": "^8.18.0",
     "eslint": "^9.0.0",
     "prettier": "^3.0.0"
   }

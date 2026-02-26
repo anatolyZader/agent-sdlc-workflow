@@ -1,0 +1,5 @@
+{
+  "description": "Hash of .claude/agents/* and prompt content; if this changes, require explicit rebaseline PR before merging.",
+  "agentsHash": null,
+  "updatedAt": null
+}

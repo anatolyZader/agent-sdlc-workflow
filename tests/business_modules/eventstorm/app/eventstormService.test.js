@@ -7,16 +7,13 @@ const { EventstormService } = require(path.join(__dirname, '../../../../business
 
 describe('EventstormService', () => {
   describe('runSession', () => {
-    it('returns EventstormResult with ubiquitousLanguage, domainEvents, commands, policies, aggregates, boundedContexts, openQuestions, mermaid', async () => {
+    it('returns sessionId and outputs from facilitation port', async () => {
       const mockResult = {
-        ubiquitousLanguage: [],
-        domainEvents: [{ name: 'ChargeCreated', when: 'on create', data: [] }],
-        commands: [{ name: 'CreateCharge', actor: 'User' }],
-        policies: [],
-        aggregates: [{ name: 'Charge', invariants: [], handles: ['CreateCharge'] }],
-        boundedContexts: [{ name: 'Billing', core: true, eventsOwned: ['ChargeCreated'] }],
-        openQuestions: [],
-        mermaid: { eventStorm: '', contextMap: '' },
+        sessionId: 'test-session-123',
+        outputs: [
+          { sessionId: 'test-session-123', path: '/repo/docs/eventstorm/test-session-123/01-context.md' },
+          { sessionId: 'test-session-123', path: '/repo/docs/eventstorm/test-session-123/summary.json' },
+        ],
       };
       const port = {
         runSession: async () => mockResult,
@@ -26,24 +23,18 @@ describe('EventstormService', () => {
         domainName: 'Billing',
         problemStatement: 'Customers cannot understand refunds',
       });
-      assert.ok(Array.isArray(result.ubiquitousLanguage));
-      assert.ok(Array.isArray(result.domainEvents));
-      assert.ok(Array.isArray(result.commands));
-      assert.ok(Array.isArray(result.policies));
-      assert.ok(Array.isArray(result.aggregates));
-      assert.ok(Array.isArray(result.boundedContexts));
-      assert.ok(Array.isArray(result.openQuestions));
-      assert.ok(result.mermaid && typeof result.mermaid === 'object');
-      assert.ok(result.mermaid.eventStorm !== undefined);
-      assert.ok(result.mermaid.contextMap !== undefined);
+      assert.strictEqual(result.sessionId, 'test-session-123');
+      assert.ok(Array.isArray(result.outputs));
+      assert.strictEqual(result.outputs.length, 2);
+      assert.strictEqual(result.outputs[0].path, '/repo/docs/eventstorm/test-session-123/01-context.md');
     });
 
-    it('delegates to facilitation port with request', async () => {
+    it('delegates to facilitation port with request (rawText or domainName+problemStatement)', async () => {
       let receivedRequest;
       const port = {
         runSession: async (req) => {
           receivedRequest = req;
-          return { ubiquitousLanguage: [], domainEvents: [], commands: [], policies: [], aggregates: [], boundedContexts: [], openQuestions: [], mermaid: { eventStorm: '', contextMap: '' } };
+          return { sessionId: 'sid', outputs: [] };
         },
       };
       const service = new EventstormService(port);

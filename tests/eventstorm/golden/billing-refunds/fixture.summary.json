@@ -1,0 +1,40 @@
+{
+  "goal": "Clarify refund flow and keep it consistent with Stripe.",
+  "scope": { "in": ["Refunds", "Stripe integration"], "out": ["Tax reporting"] },
+  "actors": ["Customer", "Support", "Billing system"],
+  "glossary": [
+    { "term": "Refund", "definition": "Reversal of a charge credited back to the customer.", "synonyms": [] }
+  ],
+  "commands": [
+    { "name": "RequestRefund", "description": "Customer or support requests a refund" },
+    { "name": "ApproveRefund", "description": "System approves refund within policy" }
+  ],
+  "events": [
+    { "name": "RefundRequested", "description": "A refund was requested" },
+    { "name": "RefundApproved", "description": "Refund was approved and sent to Stripe" }
+  ],
+  "policies": [
+    { "trigger": "RequestRefund", "condition": "amount <= original charge", "emits": ["RefundRequested"] },
+    { "trigger": "RefundRequested", "condition": "valid", "emits": ["RefundApproved"] }
+  ],
+  "aggregates": [
+    {
+      "name": "Refund",
+      "invariants": ["Refund amount must not exceed original charge", "At most one full refund per charge unless partial"],
+      "ownsCommands": ["RequestRefund", "ApproveRefund"],
+      "emitsEvents": ["RefundRequested", "RefundApproved"]
+    }
+  ],
+  "boundedContexts": [
+    {
+      "name": "Billing",
+      "responsibilities": ["Refunds", "Stripe integration"],
+      "integrations": ["Stripe API"]
+    }
+  ],
+  "capabilities": [
+    { "name": "Process refund", "specId": "process-refund" }
+  ],
+  "openQuestions": ["Who approves refunds above $500?"],
+  "contradictions": []
+}

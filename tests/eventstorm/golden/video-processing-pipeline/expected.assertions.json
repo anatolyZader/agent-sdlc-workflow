@@ -1,0 +1,9 @@
+{
+  "expectContradictions": false,
+  "minCommands": 2,
+  "minEvents": 2,
+  "minAggregates": 1,
+  "minBoundedContexts": 1,
+  "requireInvariantModals": true,
+  "allowEmptyInvariants": false
+}

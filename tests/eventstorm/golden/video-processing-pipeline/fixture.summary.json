@@ -1,0 +1,41 @@
+{
+  "goal": "Reliably transcode uploads and serve streams with retries.",
+  "scope": { "in": ["Upload", "Transcode", "Streaming"], "out": ["CDN internals"] },
+  "actors": ["User", "Transcoder", "Streaming service"],
+  "glossary": [
+    { "term": "Transcode", "definition": "Convert source video to target codecs (e.g. H.264, WebM).", "synonyms": [] }
+  ],
+  "commands": [
+    { "name": "UploadVideo", "description": "User uploads a video file" },
+    { "name": "StartTranscode", "description": "System starts transcoding job" }
+  ],
+  "events": [
+    { "name": "VideoUploaded", "description": "Video file received" },
+    { "name": "TranscodeRequested", "description": "Transcode job requested" },
+    { "name": "TranscodeCompleted", "description": "Transcode job finished" }
+  ],
+  "policies": [
+    { "trigger": "VideoUploaded", "condition": "file size <= 2GB", "emits": ["TranscodeRequested"] },
+    { "trigger": "TranscodeRequested", "condition": "success", "emits": ["TranscodeCompleted"] }
+  ],
+  "aggregates": [
+    {
+      "name": "Video",
+      "invariants": ["File size must be at most 2GB", "Must support at least H.264 and WebM"],
+      "ownsCommands": ["UploadVideo", "StartTranscode"],
+      "emitsEvents": ["VideoUploaded", "TranscodeRequested", "TranscodeCompleted"]
+    }
+  ],
+  "boundedContexts": [
+    {
+      "name": "Media",
+      "responsibilities": ["Upload", "Transcode", "Streaming"],
+      "integrations": ["Storage", "Transcoder API"]
+    }
+  ],
+  "capabilities": [
+    { "name": "Upload and transcode", "specId": "upload-transcode" }
+  ],
+  "openQuestions": ["Retry backoff strategy?"],
+  "contradictions": []
+}
