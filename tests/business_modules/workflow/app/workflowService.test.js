@@ -166,4 +166,51 @@ describe('WorkflowService', () => {
       assert.strictEqual(result.status, 'aborted');
     });
   });
+
+  describe('beads sync', () => {
+    it('calls syncRunState after startWorkflow when workflowBeadsPort is provided', async () => {
+      let syncedRun = null;
+      const beadsPort = { syncRunState: async (run) => { syncedRun = run; } };
+      const service = new WorkflowService(deps({ workflowBeadsPort: beadsPort }));
+      await service.startWorkflow({ featureTitle: 'sync test' });
+      assert.ok(syncedRun);
+      assert.strictEqual(syncedRun.featureTitle, 'sync test');
+      assert.strictEqual(syncedRun.status, 'running');
+      assert.strictEqual(syncedRun.currentStep, 'eventstorm');
+      assert.deepStrictEqual(syncedRun.completedSteps, []);
+    });
+
+    it('calls syncRunState after successful step completion when workflowBeadsPort is provided', async () => {
+      const plan = [{ name: 'eventstorm', mode: 'auto' }, { name: 'c4', mode: 'auto' }];
+      const run = {
+        id: 'wf-sync',
+        featureTitle: 'feature',
+        status: 'running',
+        currentStep: 'eventstorm',
+        completedSteps: [],
+        artifacts: {},
+        planJson: plan,
+        currentStepRetries: 0,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      let syncedRun = null;
+      const beadsPort = { syncRunState: async (r) => { syncedRun = r; } };
+      const repo = {
+        save: async () => {},
+        get: async (id) => (id === 'wf-sync' ? { ...run } : null),
+        update: async () => {},
+      };
+      const okExecutor = { runStep: async () => ({ status: 'ok', artifacts: [] }) };
+      const service = new WorkflowService(deps({
+        workflowRepo: repo,
+        stepExecutor: okExecutor,
+        workflowBeadsPort: beadsPort,
+      }));
+      await service.resumeWorkflow('wf-sync');
+      assert.ok(syncedRun);
+      assert.deepStrictEqual(syncedRun.completedSteps, ['eventstorm']);
+      assert.strictEqual(syncedRun.currentStep, 'c4');
+    });
+  });
 });

@@ -12,6 +12,7 @@ class InProcessStepExecutorAdapter extends IWorkflowStepExecutorPort {
     c4Controller,
     specController,
     planController,
+    beadsController,
     tddController,
     lintController,
     secureController,
@@ -24,6 +25,7 @@ class InProcessStepExecutorAdapter extends IWorkflowStepExecutorPort {
       c4: c4Controller,
       spec: specController,
       plan: planController,
+      beads: beadsController,
       tdd_red: tddController,
       tdd_green: tddController,
       lint: lintController,
@@ -87,6 +89,12 @@ class InProcessStepExecutorAdapter extends IWorkflowStepExecutorPort {
       case 'plan':
         return {
           specArtifacts: artifacts.spec,
+          featureTitle: r.featureTitle,
+          ...base,
+        };
+      case 'beads':
+        return {
+          planArtifacts: artifacts.plan,
           featureTitle: r.featureTitle,
           ...base,
         };

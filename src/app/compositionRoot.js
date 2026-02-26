@@ -67,10 +67,25 @@ function createContainer() {
     }).singleton(),
     clock: awilix.asClass(systemClock.SystemClockAdapter).singleton(),
     workflowService: awilix.asFunction(
-      ({ workflowRepo, stepExecutor, artifactStore, clock, config }) =>
-        new workflowServiceModule.WorkflowService({ workflowRepo, stepExecutor, artifactStore, clock, config })
+      ({ workflowRepo, stepExecutor, artifactStore, clock, config, workflowBeadsPort }) =>
+        new workflowServiceModule.WorkflowService({
+          workflowRepo,
+          stepExecutor,
+          artifactStore,
+          clock,
+          config,
+          workflowBeadsPort,
+        })
     ).singleton(),
     workflowController: awilix.asClass(workflowControllerModule.WorkflowController).singleton(),
+  });
+
+  // Workflow beads step (beads functionality in workflow module via workflowBeadsAdapter)
+  const workflowBeadsAdapter = require(path.join(projectRoot, 'business_modules/workflow/infrastructure/adapters/workflowBeadsAdapter'));
+  const beadsControllerModule = require(path.join(projectRoot, 'business_modules/workflow/app/beadsController'));
+  container.register({
+    workflowBeadsPort: awilix.asClass(workflowBeadsAdapter.WorkflowBeadsAdapter).singleton(),
+    beadsController: awilix.asClass(beadsControllerModule.BeadsController).singleton(),
   });
 
   // Eventstorm module
@@ -94,21 +109,19 @@ function createContainer() {
   });
 
   // Spec module
-  const specGeneratorAdapter = require(path.join(projectRoot, 'business_modules/spec/infrastructure/adapters/specGeneratorAdapter'));
+  const specSpecKitAdapter = require(path.join(projectRoot, 'business_modules/spec/infrastructure/adapters/specSpecKitAdapter'));
   const specServiceModule = require(path.join(projectRoot, 'business_modules/spec/app/specService'));
   const specControllerModule = require(path.join(projectRoot, 'business_modules/spec/app/specController'));
   container.register({
-    specGenerationPort: awilix.asClass(specGeneratorAdapter.SpecGeneratorAdapter).singleton(),
+    specGenerationPort: awilix.asClass(specSpecKitAdapter.SpecSpecKitAdapter).singleton(),
     specService: awilix.asClass(specServiceModule.SpecService).singleton(),
     specController: awilix.asClass(specControllerModule.SpecController).singleton(),
   });
 
-  // Plan module (spec-kit plan step)
-  const planSpecKitAdapter = require(path.join(projectRoot, 'business_modules/plan/infrastructure/adapters/planSpecKitAdapter'));
+  // Plan module (service calls root specKitCli)
   const planServiceModule = require(path.join(projectRoot, 'business_modules/plan/app/planService'));
   const planControllerModule = require(path.join(projectRoot, 'business_modules/plan/app/planController'));
   container.register({
-    planGenerationPort: awilix.asClass(planSpecKitAdapter.PlanSpecKitAdapter).singleton(),
     planService: awilix.asClass(planServiceModule.PlanService).singleton(),
     planController: awilix.asClass(planControllerModule.PlanController).singleton(),
   });

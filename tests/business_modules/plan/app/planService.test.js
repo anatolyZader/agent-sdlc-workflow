@@ -3,24 +3,41 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
 const path = require('path');
+const fs = require('fs').promises;
+const os = require('os');
 const { PlanService } = require(path.join(__dirname, '../../../../business_modules/plan/app/planService'));
 
 describe('PlanService', () => {
-  describe('run', () => {
-    it('delegates to planGenerationPort.run with inputs', async () => {
-      const inputs = { specArtifacts: { path: '/p/.specify/specs/001-foo/spec.md' }, featureTitle: 'Foo' };
-      const expected = { status: 'ok', artifacts: [], metrics: {}, errors: [] };
-      const port = { run: async (i) => (assert.deepStrictEqual(i, inputs), expected) };
-      const service = new PlanService(port);
-      const result = await service.run(inputs);
-      assert.strictEqual(result.status, 'ok');
-      assert.strictEqual(result.artifacts.length, 0);
+  it('returns envelope with status, artifacts, metrics, errors', async () => {
+    const projectRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'plan-svc-'));
+    const config = { projectRoot, useSpecKitPackage: false };
+    const service = new PlanService(config);
+
+    const result = await service.run({
+      specArtifacts: null,
+      featureTitle: 'foo',
     });
 
-    it('propagates port errors', async () => {
-      const port = { run: async () => { throw new Error('plan failed'); } };
-      const service = new PlanService(port);
-      await assert.rejects(() => service.run({}), { message: 'plan failed' });
+    assert.ok(['ok', 'failed'].includes(result.status));
+    assert.ok(Array.isArray(result.artifacts));
+    assert.ok(typeof result.metrics?.durationMs === 'number');
+    assert.ok(Array.isArray(result.errors));
+  });
+
+  it('returns failed when ensureSpecKitReady throws (useSpecKitPackage true, no .specify)', async () => {
+    const projectRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'plan-svc-nospeckit-'));
+    const config = { projectRoot, useSpecKitPackage: true, specifyAutoInit: false };
+    const service = new PlanService(config);
+
+    const result = await service.run({
+      specArtifacts: null,
     });
+
+    assert.strictEqual(result.status, 'failed');
+    assert.strictEqual(result.artifacts.length, 0);
+    assert.ok(result.errors.length > 0);
+    assert.ok(result.errors[0].includes('Spec-kit') || result.errors[0].includes('specify'));
+
+    await fs.rm(projectRoot, { recursive: true, force: true });
   });
 });

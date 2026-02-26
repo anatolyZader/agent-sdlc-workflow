@@ -6,24 +6,41 @@ const { ISpecGenerationPort } = require('../../domain/ports/ISpecGenerationPort'
 const { produceSpecWithSpecKit } = require('../specKitHelper');
 
 /**
- * Spec generator adapter. Writes .specify/specs/<feature>/spec.md from eventstorm/c4.
- * When config.useSpecKitPackage is true: invokes the spec-kit package (specify check, optional init)
- * and uses .specify/templates/spec-template.md. Set USE_SPEC_KIT_PACKAGE=1 and run
- * `uv tool install specify-cli --from git+https://github.com/github/spec-kit.git` and
- * `specify init .` in the project (or SPECIFY_AUTO_INIT=1 to init automatically).
- * Implements ISpecGenerationPort.
+ * Resolve artifact: object use as-is; string try as file path (JSON).
+ * @param {object|string|null} artifact
+ * @param {string} projectRoot
+ * @returns {Promise<object>}
  */
-class SpecGeneratorAdapter extends ISpecGenerationPort {
+async function resolveArtifact(artifact, projectRoot) {
+  if (artifact == null) return {};
+  if (typeof artifact === 'object') return artifact;
+  const p = String(artifact).trim();
+  if (!p) return {};
+  try {
+    const full = path.isAbsolute(p) ? p : path.join(projectRoot, p);
+    const raw = await fs.readFile(full, 'utf8');
+    return JSON.parse(raw);
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Spec generator adapter. Writes .specify/specs/<feature>/spec.md from eventstorm/c4 via spec-kit helper.
+ * When config.useSpecKitPackage is true: ensureSpecKitReady and .specify template. Implements ISpecGenerationPort.
+ */
+class SpecSpecKitAdapter extends ISpecGenerationPort {
   constructor({ config }) {
     super();
+    this.config = config;
     this.projectRoot = config?.projectRoot ?? process.cwd();
   }
 
   async run(inputs) {
     const start = Date.now();
     try {
-      const eventstormData = await this._resolveArtifact(inputs.eventstormArtifacts);
-      const c4Data = await this._resolveArtifact(inputs.c4Artifacts);
+      const eventstormData = await resolveArtifact(inputs.eventstormArtifacts, this.projectRoot);
+      const c4Data = await resolveArtifact(inputs.c4Artifacts, this.projectRoot);
       const featureTitle = inputs.featureTitle || inputs.run?.featureTitle || 'feature';
       const workflowRunId = inputs.workflowRunId;
 
@@ -55,25 +72,6 @@ class SpecGeneratorAdapter extends ISpecGenerationPort {
       };
     }
   }
-
-  /**
-   * Resolve artifact: object use as-is; string try as file path (JSON).
-   * @param {object|string|null} artifact
-   * @returns {Promise<object>}
-   */
-  async _resolveArtifact(artifact) {
-    if (artifact == null) return {};
-    if (typeof artifact === 'object') return artifact;
-    const p = String(artifact).trim();
-    if (!p) return {};
-    try {
-      const full = path.isAbsolute(p) ? p : path.join(this.projectRoot, p);
-      const raw = await fs.readFile(full, 'utf8');
-      return JSON.parse(raw);
-    } catch {
-      return {};
-    }
-  }
 }
 
-module.exports = { SpecGeneratorAdapter };
+module.exports = { SpecSpecKitAdapter };

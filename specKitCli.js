@@ -53,16 +53,10 @@ function runSpecify(args, cwd, env = {}) {
   });
 }
 
-/**
- * Run `specify check`.
- */
-async function runSpecifyCheck(projectRoot) {
+function runSpecifyCheck(projectRoot) {
   return runSpecify(['check'], projectRoot);
 }
 
-/**
- * Ensure .specify exists; if not, run `specify init . --force --ignore-agent-tools`.
- */
 async function ensureSpecifyInited(projectRoot) {
   const specifyDir = path.join(projectRoot, '.specify');
   try {
@@ -81,15 +75,33 @@ async function ensureSpecifyInited(projectRoot) {
   return { ok: true };
 }
 
-/**
- * Run `specify plan` for the project (generates plan from .specify/specs). May not exist in all spec-kit versions.
- * @param {string} projectRoot
- * @param {string} [slug] - optional spec slug (e.g. 001-feature-name) if CLI supports it
- * @returns {Promise<{ ok: boolean, stdout: string, stderr: string, code: number | null }>}
- */
 async function runSpecifyPlan(projectRoot, slug) {
   const args = slug ? ['plan', '.', '--spec', slug] : ['plan', '.'];
   return runSpecify(args, projectRoot);
+}
+
+const SPEC_KIT_INSTALL_HINT =
+  'Install: uv tool install specify-cli --from git+https://github.com/github/spec-kit.git ; then run specify init . in the project.';
+
+async function ensureSpecKitReady(projectRoot, options = {}) {
+  const { useSpecKitPackage = false, autoInit = false } = options;
+  if (!useSpecKitPackage) return;
+
+  const checkResult = await runSpecifyCheck(projectRoot);
+  if (checkResult.ok) return;
+
+  if (autoInit) {
+    const initResult = await ensureSpecifyInited(projectRoot);
+    if (!initResult.ok) {
+      throw new Error(initResult.message || `specify init failed. ${SPEC_KIT_INSTALL_HINT}`);
+    }
+    return;
+  }
+
+  throw new Error(
+    `Spec-kit required. ${SPEC_KIT_INSTALL_HINT} ` +
+      (checkResult.stderr || checkResult.stdout || '')
+  );
 }
 
 module.exports = {
@@ -97,4 +109,5 @@ module.exports = {
   runSpecifyCheck,
   ensureSpecifyInited,
   runSpecifyPlan,
+  ensureSpecKitReady,
 };

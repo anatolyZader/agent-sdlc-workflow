@@ -2,7 +2,7 @@
 
 const fs = require('fs').promises;
 const path = require('path');
-const { runSpecifyCheck, ensureSpecifyInited } = require('../../../cross-cut-modules/specKit/specKitCli');
+const { ensureSpecKitReady } = require('../../../specKitCli');
 
 /**
  * Slug for spec-kit feature folder (e.g. "001-refund-approval").
@@ -121,22 +121,7 @@ async function produceSpecWithSpecKit(projectRoot, featureTitle, eventstormData,
   const { useSpecKitPackage = false, autoInit = false } = options;
   const slug = featureSlug(featureTitle, workflowRunId);
 
-  if (useSpecKitPackage) {
-    const checkResult = await runSpecifyCheck(projectRoot);
-    if (!checkResult.ok) {
-      if (autoInit) {
-        const initResult = await ensureSpecifyInited(projectRoot);
-        if (!initResult.ok) {
-          throw new Error(initResult.message || 'specify init failed. Run: uv tool install specify-cli --from git+https://github.com/github/spec-kit.git and specify init .');
-        }
-      } else {
-        throw new Error(
-          'Spec-kit required. Install: uv tool install specify-cli --from git+https://github.com/github/spec-kit.git ; then run specify init . in the project. ' +
-            (checkResult.stderr || checkResult.stdout || '')
-        );
-      }
-    }
-  }
+  await ensureSpecKitReady(projectRoot, { useSpecKitPackage, autoInit });
 
   const template = useSpecKitPackage ? await getSpecTemplate(projectRoot) : null;
   const content = template

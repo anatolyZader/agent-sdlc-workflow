@@ -6,12 +6,19 @@ const { runGate } = require('./gates/gateRunner');
 const MAX_STEP_RETRIES_DEFAULT = 2;
 
 class WorkflowService {
-  constructor({ workflowRepo, stepExecutor, artifactStore, clock, config }) {
+  constructor({ workflowRepo, stepExecutor, artifactStore, clock, config, workflowBeadsPort }) {
     this.workflowRepo = workflowRepo;
     this.stepExecutor = stepExecutor;
     this.artifactStore = artifactStore;
     this.clock = clock;
     this.config = config || {};
+    this.workflowBeadsPort = workflowBeadsPort || null;
+  }
+
+  async _syncRunStateToBeads(run) {
+    if (this.workflowBeadsPort && typeof this.workflowBeadsPort.syncRunState === 'function') {
+      await this.workflowBeadsPort.syncRunState(run).catch(() => {});
+    }
   }
 
   async startWorkflow(input) {
@@ -40,6 +47,7 @@ class WorkflowService {
       inputJson: input,
     };
     await this.workflowRepo.save(run);
+    await this._syncRunStateToBeads(run);
     return { runId, status: run.status };
   }
 
@@ -74,6 +82,7 @@ class WorkflowService {
         updatedAt: this.clock.now(),
       };
       await this.workflowRepo.update(updated);
+      await this._syncRunStateToBeads(updated);
       return {
         status: updated.status,
         currentStep: run.currentStep,
@@ -126,6 +135,7 @@ class WorkflowService {
           updatedAt: now,
         };
         await this.workflowRepo.update(updated);
+        await this._syncRunStateToBeads(updated);
         return {
           status: 'running',
           currentStep: run.currentStep,
@@ -145,6 +155,7 @@ class WorkflowService {
         updatedAt: now,
       };
       await this.workflowRepo.update(updated);
+      await this._syncRunStateToBeads(updated);
       return {
         status: 'failed',
         currentStep: updated.currentStep,
@@ -167,6 +178,7 @@ class WorkflowService {
       updatedAt: now,
     };
     await this.workflowRepo.update(updated);
+    await this._syncRunStateToBeads(updated);
     return {
       status: updated.status,
       currentStep: updated.currentStep,
@@ -193,7 +205,9 @@ class WorkflowService {
     const run = await this.workflowRepo.get(runId);
     if (run) {
       const now = this.clock.now();
-      await this.workflowRepo.update({ ...run, status: 'aborted', updatedAt: now });
+      const updated = { ...run, status: 'aborted', updatedAt: now };
+      await this.workflowRepo.update(updated);
+      await this._syncRunStateToBeads(updated);
     }
     return { status: 'aborted' };
   }
