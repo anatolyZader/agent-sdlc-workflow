@@ -1,8 +1,7 @@
 'use strict';
 
-const path = require('path');
 const { IWorkflowBeadsPort } = require('../../domain/ports/IWorkflowBeadsPort');
-const { runBdInit, runBdReady, isBeadsInited, writeSdlcRunState } = require('../../../../beadsCli');
+const { runBdInit, runBdReady, isBeadsInited, writeSdlcRunState, writeReadyJson } = require('../../../../beadsCli');
 
 class WorkflowBeadsAdapter extends IWorkflowBeadsPort {
   constructor({ config }) {
@@ -29,9 +28,31 @@ class WorkflowBeadsAdapter extends IWorkflowBeadsPort {
 
       const readyResult = await runBdReady(this.projectRoot, { json: true });
       const durationMs = Date.now() - start;
-      const beadsDir = path.join(this.projectRoot, '.beads');
+
+      if (!readyResult.ok) {
+        return {
+          status: 'failed',
+          artifacts: [],
+          metrics: { durationMs },
+          errors: [readyResult.stderr || readyResult.stdout || 'bd ready failed.'],
+        };
+      }
+
+      let readyPath = null;
+      if (readyResult.stdout) {
+        try {
+          JSON.parse(readyResult.stdout);
+          await writeReadyJson(this.projectRoot, readyResult.stdout);
+          readyPath = '.beads/ready.json';
+        } catch {
+          // stdout not valid JSON; skip writing, no readyPath in meta
+        }
+      }
+
+      const meta = { inited: true };
+      if (readyPath) meta.readyPath = readyPath;
       const artifacts = [
-        { type: 'beads', path: beadsDir, meta: { inited: true, readyOk: readyResult.ok } },
+        { type: 'beads', path: '.beads', meta },
       ];
 
       return {
@@ -54,11 +75,9 @@ class WorkflowBeadsAdapter extends IWorkflowBeadsPort {
   async syncRunState(run) {
     if (!run || typeof run.id !== 'string') return;
     try {
-      const inited = await isBeadsInited(this.projectRoot);
-      if (!inited) {
-        const initResult = await runBdInit(this.projectRoot, { quiet: true });
-        if (!initResult.ok) return;
-      }
+      // Ensure .beads exists and write state file without requiring bd (no bd init).
+      // writeSdlcRunState does mkdir(.beads, { recursive: true }), so the pipeline mirror
+      // always exists even when bd is not installed.
       const plan = run.planJson && Array.isArray(run.planJson) ? run.planJson : [];
       const stepNames = plan.map((s) => (s && s.name) || s).filter(Boolean);
       const updatedAt = run.updatedAt instanceof Date ? run.updatedAt.toISOString() : (run.updatedAt && String(run.updatedAt)) || new Date().toISOString();

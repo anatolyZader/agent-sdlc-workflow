@@ -5,19 +5,20 @@ const path = require('path');
 const fs = require('fs').promises;
 
 /**
- * Run the beads (bd) CLI. Env: BEADS_CLI_PATH for explicit executable; otherwise uses `bd` on PATH.
+ * Run the beads (bd) CLI. Executable: env.BEADS_CLI_PATH || process.env.BEADS_CLI_PATH || 'bd'.
  * @param {string[]} args - e.g. ['init', '--quiet'], ['ready', '--json']
  * @param {string} cwd - working directory (project root)
- * @param {object} [env] - optional env overrides
+ * @param {object} [env] - optional env overrides (BEADS_CLI_PATH is respected)
  * @returns {Promise<{ ok: boolean, stdout: string, stderr: string, code: number | null }>}
  */
 function runBd(args, cwd, env = {}) {
   return new Promise((resolve) => {
-    const cmd = process.env.BEADS_CLI_PATH || 'bd';
+    const mergedEnv = { ...process.env, ...env };
+    const cmd = mergedEnv.BEADS_CLI_PATH || process.env.BEADS_CLI_PATH || 'bd';
     const proc = spawn(cmd, args, {
       cwd,
-      shell: true,
-      env: { ...process.env, ...env },
+      shell: false,
+      env: mergedEnv,
     });
     let stdout = '';
     let stderr = '';
@@ -67,10 +68,25 @@ async function isBeadsInited(projectRoot) {
 }
 
 const SDLC_RUN_STATE_FILENAME = 'sdlc-run-state.json';
+const READY_JSON_FILENAME = 'ready.json';
+
+/**
+ * Write bd ready --json output under .beads. Overwrites if present. Caller should pass valid JSON
+ * (adapter parses before calling so .beads/ready.json is always valid JSON when present).
+ * @param {string} projectRoot - Repo root
+ * @param {string} content - JSON string (e.g. array from bd ready --json)
+ * @returns {Promise<void>}
+ */
+async function writeReadyJson(projectRoot, content) {
+  const dir = path.join(projectRoot, '.beads');
+  await fs.mkdir(dir, { recursive: true });
+  const filePath = path.join(dir, READY_JSON_FILENAME);
+  await fs.writeFile(filePath, content, 'utf8');
+}
 
 /**
  * Write workflow run state under .beads so agents and tools see pipeline state.
- * Caller must ensure .beads exists (e.g. after bd init). Overwrites existing file.
+ * Creates .beads if missing (no bd required). Overwrites existing file.
  * @param {string} projectRoot - Repo root
  * @param {object} state - { runId, featureTitle, status, currentStep, completedSteps, stepNames, updatedAt }
  * @returns {Promise<void>}
@@ -97,5 +113,7 @@ module.exports = {
   runBdReady,
   isBeadsInited,
   writeSdlcRunState,
+  writeReadyJson,
   SDLC_RUN_STATE_FILENAME,
+  READY_JSON_FILENAME,
 };

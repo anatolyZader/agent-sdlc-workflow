@@ -41,6 +41,32 @@ describe('WorkflowBeadsAdapter', () => {
       }
     });
 
+    it('creates .beads and writes sdlc-run-state.json when .beads does not exist (no bd required)', async () => {
+      const tmpDir = path.join(os.tmpdir(), `beads-sync-mkdir-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
+      await fs.mkdir(tmpDir, { recursive: true });
+      try {
+        const adapter = new WorkflowBeadsAdapter({ config: { projectRoot: tmpDir } });
+        const run = {
+          id: 'wf-mirror',
+          featureTitle: 'Mirror test',
+          status: 'running',
+          currentStep: 'eventstorm',
+          completedSteps: [],
+          planJson: [{ name: 'eventstorm', mode: 'auto' }],
+          updatedAt: new Date(),
+        };
+        await adapter.syncRunState(run);
+        const statePath = path.join(tmpDir, '.beads', SDLC_RUN_STATE_FILENAME);
+        const raw = await fs.readFile(statePath, 'utf8');
+        const state = JSON.parse(raw);
+        assert.strictEqual(state.runId, 'wf-mirror');
+        assert.strictEqual(state.featureTitle, 'Mirror test');
+        assert.strictEqual(state.currentStep, 'eventstorm');
+      } finally {
+        await fs.rm(tmpDir, { recursive: true, force: true });
+      }
+    });
+
     it('no-ops when run is null or has no id', async () => {
       const tmpDir = path.join(os.tmpdir(), `beads-sync-noop-${Date.now()}`);
       await fs.mkdir(tmpDir, { recursive: true });
