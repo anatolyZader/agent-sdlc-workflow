@@ -195,7 +195,11 @@ Defined in **IEventstormFacilitationPort.js** (JSDoc).
 
 Produced by the Claude eventstorm-coordinator agent under `docs/eventstorm/<sessionId>/summary.json`. Validated by **infrastructure/summarySchema.json**. The adapter maps its fields (e.g. glossary → ubiquitousLanguage, events → domainEvents) into EventstormResult.
 
-### 5.3 Workflow artifact contract
+### 5.3 session-dialogue.md (optional artifact)
+
+The coordinator creates **session-dialogue.md** in the same artifact dir as a human-readable transcript of the multi-loop session: Coordinator and agent turns (Facilitator, Event modeler, Skeptic, etc.) in dialogue/screenplay style, with optional code snippets. When this file exists after the run, the adapter includes **sessionDialoguePath** in EventstormResult (e.g. `docs/eventstorm/<sessionId>/session-dialogue.md`) so callers can read it. The EventstormResult typedef (IEventstormFacilitationPort) documents optional **sessionDialoguePath**.
+
+### 5.4 Workflow artifact contract
 
 After a successful eventstorm step, the step executor sets:
 
@@ -318,7 +322,7 @@ The coordinator (see `.claude/agents/eventstorm-coordinator.md`) runs:
 - The **adapter** builds a prompt (session id, artifact dir, session input, raw text) and spawns **claude --agent eventstorm-coordinator -p "..."**.
 - The **coordinator** creates the session dir, initializes **board.json**, runs the loops (Task subagents, apply **patch.json**, Bash validate), sets **board.metrics**, then writes **summary.json** from the final board.
 - **Subagents** read board.json (and session context), write **patch.json** in the session dir. The coordinator merges patches into the board and re-validates.
-- The **adapter** (after CLI exit) prefers **board.json** when present and valid (boardSchema + boardValidator); otherwise reads **summary.json**. It maps to EventstormResult (glossary → ubiquitousLanguage, events → domainEvents, etc.) and reads 06/07 Mermaid for EventstormResult.mermaid.
+- The **adapter** (after CLI exit) prefers **board.json** when present and valid (boardSchema + boardValidator); otherwise reads **summary.json**. It maps to EventstormResult (glossary → ubiquitousLanguage, events → domainEvents, etc.) and reads 06/07 Mermaid for EventstormResult.mermaid. When **session-dialogue.md** exists, the adapter sets **result.sessionDialoguePath** to its path.
 
 ### 9.5 Interactive mode (follow-up)
 

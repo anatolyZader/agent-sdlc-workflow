@@ -101,6 +101,7 @@ function createContainer() {
   container.register({
     runClaudeAgent: awilix.asValue(undefined),
     readFile: awilix.asValue(undefined),
+    writeFile: awilix.asValue(undefined),
     claudeCommand: awilix.asValue('claude'),
     eventstormFacilitationPort: awilix.asClass(claudeEventstorm.ClaudeCodeEventstormAdapter).singleton(),
     eventstormService: awilix.asFunction(

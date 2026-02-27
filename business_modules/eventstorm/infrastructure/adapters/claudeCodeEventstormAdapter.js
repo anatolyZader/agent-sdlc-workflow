@@ -132,6 +132,15 @@ class ClaudeCodeEventstormAdapter extends IEventstormFacilitationPort {
       // 07-context-map.mmd optional
     }
 
+    let sessionDialoguePath;
+    try {
+      const dialoguePath = path.join(artifactPath, 'session-dialogue.md');
+      await readFileFn(dialoguePath, 'utf8');
+      sessionDialoguePath = `${artifactDir}/session-dialogue.md`;
+    } catch {
+      // session-dialogue.md optional
+    }
+
     const eventstormResult = {
       sessionId,
       ubiquitousLanguage: source.glossary || [],
@@ -143,6 +152,7 @@ class ClaudeCodeEventstormAdapter extends IEventstormFacilitationPort {
       openQuestions: source.openQuestions || [],
       mermaid: { eventStorm: mermaidEventStorm, contextMap: mermaidContextMap },
     };
+    if (sessionDialoguePath) eventstormResult.sessionDialoguePath = sessionDialoguePath;
 
     return eventstormResult;
   }

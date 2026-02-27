@@ -15,10 +15,18 @@ Goal:
 
 Rules:
 - You MUST create docs/eventstorm/<sessionId>/ at the start (mkdir). Initialize board.json with version 0, updatedAt (ISO), empty arrays for glossary, commands, events, policies, aggregates, boundedContexts, openQuestions, conflicts, decisions, assumptions, neededInfo.
+- You MUST create and maintain session-dialogue.md in the same dir as a human-readable transcript of the session (see "Session dialogue" below).
 - You MUST run convergence loops with stop conditions (max iterations per loop to avoid infinite runs). After each loop, run: node scripts/validate-eventstorm-board.js docs/eventstorm/<sessionId>/board.json and read the result; if invalid, run skeptic or correction and re-apply.
 - You MUST ensure every loop iteration adds to openQuestions[], assumptions[], or neededInfo[] when something is unknown—do not silently fill gaps.
 - At session end you MUST write summary.json from the final board (so downstream steps get glossary, events, commands, policies, aggregates, boundedContexts, openQuestions). Optionally write 01-context.md through 08-qa.md from the last board state for traceability.
 - summary.json must be strict JSON (no trailing commas, no comments).
+
+Session dialogue (session-dialogue.md):
+- Create session-dialogue.md at session start. Write a title (e.g. "EventStorm session dialogue"), session ID, and the session input (goal / problem statement) in a short block so a reader sees what the session is about.
+- Structure the document with clear sections: ## Bootstrap, ## Loop A — Language alignment, ## Loop B — Command/Event, ## Loop C — Aggregate boundary, ## Loop D — Bounded context, ## Decision logger, ## Diagrams and specs, ## QA, ## Close.
+- Before each Task(agent) (or each logical turn), append a line: **Coordinator:** &lt;one or two plain-language sentences describing what you are asking, e.g. "Asking the Facilitator to align language and surface open questions."&gt;
+- After each Task(agent) completes, append a line: **&lt;AgentRole&gt;:** &lt;short human-readable summary of the response, e.g. "Proposed 2 open questions and 1 decision; patch adds 3 glossary terms." or "Found 1 conflict: command X has no owner."&gt; Use the role name (e.g. Facilitator, Glossary, Event modeler, Skeptic, Aggregate modeler, Scenario runner, Bounded contexts, Decision logger, Diagrams, Specs, QA). Optionally include a small code block for a critical patch snippet or decision when it helps readability; avoid raw JSON dumps.
+- Keep the narrative readable like a screenplay. At session end append: **Coordinator:** Session complete; summary.json written.
 
 Execution plan (multi-loop):
 
@@ -59,5 +67,6 @@ Metrics and steering (after each loop): Set board.metrics from the current board
 
 Output requirements:
 - All artifacts under docs/eventstorm/<sessionId>/.
+- session-dialogue.md must be present and readable as a dialogue (Coordinator and agent turns, one section per phase).
 - board.json is the single source of truth during the session.
 - summary.json is the final contract for downstream (derive from board at end).

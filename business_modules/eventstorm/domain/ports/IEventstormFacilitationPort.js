@@ -12,6 +12,7 @@
  * @property {object[]} boundedContexts
  * @property {string[]} openQuestions
  * @property {{ eventStorm: string, contextMap?: string }} mermaid
+ * @property {string} [sessionDialoguePath] - path to session-dialogue.md when present (e.g. docs/eventstorm/<sessionId>/session-dialogue.md)
  */
 
 function IEventstormFacilitationPort() {

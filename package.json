@@ -6,9 +6,11 @@
   "scripts": {
     "start": "node src/app/server.js",
     "dev": "node --watch src/app/server.js",
-    "test": "node --test tests/business_modules/workflow/app/workflowService.test.js tests/business_modules/workflow/app/stepPlanFactory.test.js tests/business_modules/eventstorm/app/eventstormService.test.js tests/business_modules/eventstorm/app/boardValidator.test.js tests/business_modules/eventstorm/infrastructure/adapters/claudeCodeEventstormAdapter.test.js tests/business_modules/workflow/app/gates/gateRunner.test.js tests/cross-cut-modules/budget/getPlan.test.js tests/integration/workflow-api.test.js",
+    "test": "node --test tests/business_modules/workflow/app/workflowService.test.js tests/business_modules/workflow/app/stepPlanFactory.test.js tests/business_modules/eventstorm/app/eventstormService.test.js tests/business_modules/eventstorm/app/boardValidator.test.js tests/business_modules/eventstorm/infrastructure/adapters/claudeCodeEventstormAdapter.test.js tests/eventstorm/session-with-dialogue.test.js tests/business_modules/workflow/app/gates/gateRunner.test.js tests/cross-cut-modules/budget/getPlan.test.js tests/integration/workflow-api.test.js",
     "test:eventstorm": "node --test tests/eventstorm/eventstorm.eval.test.js && node tests/eventstorm/runGoldenCases.js",
     "test:eventstorm:cli": "RUN_EVENTSTORM_CLI=1 node tests/eventstorm/runGoldenCases.js",
+    "run:eventstorm:session": "node scripts/run-eventstorm-session.js",
+    "test:eventstorm:session": "node --test tests/eventstorm/session-with-dialogue.test.js",
     "migrate": "node src/cross-cut-modules/persistence/runMigrations.js","full-cycle":"node scripts/run-full-cycle.js"
   },
   "engines": {
