@@ -1,6 +1,6 @@
 # Spec: AI-Assisted SDLC Workflow Engine
 
-A GCP VM–based Fastify engine that orchestrates the AI-assisted SDLC pipeline: eventstorm → c4 → spec → plan → beads → tdd_red → tdd_green → lint → secure → doc, with optional budget (token/cost) policy, auth (JWT or X-Workflow-Token; JWT may be issued by an OAuth2 provider), SQLite persistence, and Awilix DI. The Cursor extension is a thin client that calls this API.
+A GCP VM–based Fastify engine that orchestrates the AI-assisted SDLC pipeline: eventstorm → c4 → spec → plan → beads → tdd_red → tdd_green → lint → secure → doc, with optional budget (cross-cut, token/cost policy), auth (JWT or X-Workflow-Token; JWT may be issued via OAuth2: `GET /auth/login/:provider`, `GET /auth/callback/:provider`), SQLite persistence, and Awilix DI. The Cursor extension is a thin client that calls this API.
 
 ---
 
@@ -48,7 +48,7 @@ This spec describes the **workflow engine** as a whole. The following business m
 - **lint:** ESLint, Prettier, tests, SonarCloud gate.
 - **secure:** npm audit, static analysis, secrets check.
 - **doc:** Regenerate docs/architecture.md, module READMEs.
-- **budget:** Token/cost policy; quality floors; step limits and escalation.
+- **budget:** Cross-cut module (`src/cross-cut-modules/budget/`); token/cost policy, quality floors, step limits; used by workflow and exposed via `POST /api/budget/plan`.
 
 ---
 

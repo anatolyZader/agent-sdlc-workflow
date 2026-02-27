@@ -2,7 +2,8 @@
 
 const fp = require('fastify-plugin');
 
-module.exports = fp(async function budgetRouter(fastify, opts) {
+/** Thin route for POST /api/budget/plan; delegates to cross-cut budget getPlan. */
+module.exports = fp(async function budgetRoute(fastify, opts) {
   fastify.route({
     method: 'POST',
     url: '/api/budget/plan',

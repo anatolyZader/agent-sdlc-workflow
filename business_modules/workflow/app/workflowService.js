@@ -6,13 +6,14 @@ const { runGate } = require('./gates/gateRunner');
 const MAX_STEP_RETRIES_DEFAULT = 2;
 
 class WorkflowService {
-  constructor({ workflowRepo, stepExecutor, artifactStore, clock, config, workflowBeadsPort }) {
+  constructor({ workflowRepo, stepExecutor, artifactStore, clock, config, workflowBeadsPort, budgetPlan }) {
     this.workflowRepo = workflowRepo;
     this.stepExecutor = stepExecutor;
     this.artifactStore = artifactStore;
     this.clock = clock;
     this.config = config || {};
     this.workflowBeadsPort = workflowBeadsPort || null;
+    this.budgetPlan = budgetPlan || null;
   }
 
   async _syncRunStateToBeads(run) {
@@ -30,9 +31,14 @@ class WorkflowService {
     if (budgetProfile !== undefined && !['low', 'medium', 'high'].includes(budgetProfile)) {
       throw new Error('Invalid options.budgetProfile; must be low, medium, or high');
     }
+    let budgetPlanResult = null;
+    if (this.budgetPlan && typeof this.budgetPlan.getPlan === 'function') {
+      budgetPlanResult = await this.budgetPlan.getPlan({ profile: budgetProfile });
+    }
     const runId = `wf-${this.clock.now().getTime()}-${Math.random().toString(36).slice(2, 9)}`;
     const now = this.clock.now();
-    const planJson = buildDefaultStepPlan();
+    const planJson = buildDefaultStepPlan(this.config);
+    const inputJson = { ...input, budgetPlan: budgetPlanResult || undefined };
     const run = {
       id: runId,
       featureTitle: String(featureTitle).trim(),
@@ -44,7 +50,7 @@ class WorkflowService {
       planJson,
       createdAt: now,
       updatedAt: now,
-      inputJson: input,
+      inputJson,
     };
     await this.workflowRepo.save(run);
     await this._syncRunStateToBeads(run);
@@ -64,7 +70,7 @@ class WorkflowService {
         artifacts: run.artifacts || {},
       };
     }
-    const plan = run.planJson && run.planJson.length ? run.planJson : buildDefaultStepPlan();
+    const plan = run.planJson && run.planJson.length ? run.planJson : buildDefaultStepPlan(this.config);
     const currentIndex = plan.findIndex((s) => s.name === run.currentStep);
     if (currentIndex < 0) {
       return {
@@ -95,6 +101,15 @@ class WorkflowService {
       workflowRunId: run.id,
       inputs: { run, plan },
     });
+    if (run.currentStep === 'beads' && result.status === 'failed') {
+      result = {
+        status: 'ok',
+        artifacts: [...(result.artifacts || []), { type: 'beads_skipped', path: null, meta: { reason: result.errors?.[0] || 'unknown' } }],
+        metrics: result.metrics || {},
+        errors: [],
+        logs: [...(result.logs || []), `Beads step failed (fail-open): ${result.errors?.[0] || 'unknown'}`],
+      };
+    }
     if (result.status === 'ok' && step.exitCriteria?.length) {
       const context = {
         runId: run.id,
@@ -122,7 +137,10 @@ class WorkflowService {
       }
     }
     const now = this.clock.now();
-    const maxRetries = this.config.maxStepRetries ?? MAX_STEP_RETRIES_DEFAULT;
+    const maxRetries =
+      run.inputJson?.budgetPlan?.maxRetries ??
+      this.config.maxStepRetries ??
+      MAX_STEP_RETRIES_DEFAULT;
     const currentRetries = run.currentStepRetries ?? 0;
 
     if (result.status === 'failed') {

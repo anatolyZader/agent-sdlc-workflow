@@ -1,14 +1,16 @@
 'use strict';
 
+const fs = require('node:fs').promises;
 const { spawn } = require('node:child_process');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const Ajv = require('ajv').default;
 const { IEventstormFacilitationPort } = require('../../domain/ports/IEventstormFacilitationPort');
 
 /**
  * Runs the EventStorm stage by invoking Claude Code with the eventstorm-coordinator
  * agent. The coordinator delegates to eventstorm-* subagents via Task(); this adapter
- * does not call any LLM API directly.
+ * does not call any LLM API directly. Returns a single schema-validated EventstormResult.
  */
 class ClaudeCodeEventstormAdapter extends IEventstormFacilitationPort {
   /**
@@ -16,10 +18,15 @@ class ClaudeCodeEventstormAdapter extends IEventstormFacilitationPort {
    * @param {object} deps.config - app config with projectRoot
    * @param {string} [deps.claudeCommand='claude'] - CLI command (path or "claude")
    */
-  constructor({ config, claudeCommand = 'claude' }) {
+  constructor({ config, claudeCommand = 'claude', runClaudeAgent, readFile }) {
     super();
     this.projectRoot = config?.projectRoot ?? process.cwd();
     this.claudeCommand = claudeCommand;
+    this._runClaudeAgentInject = runClaudeAgent;
+    this._readFileInject = readFile;
+    const schemaPath = path.join(__dirname, '..', 'summarySchema.json');
+    this._schema = JSON.parse(require('node:fs').readFileSync(schemaPath, 'utf8'));
+    this._validate = new Ajv({ strict: false }).compile(this._schema);
   }
 
   /**
@@ -31,7 +38,7 @@ class ClaudeCodeEventstormAdapter extends IEventstormFacilitationPort {
    * @param {string[]} [request.constraints]
    * @param {number} [request.timeboxMinutes]
    * @param {unknown[]} [request.contextSnippets]
-   * @returns {Promise<{ sessionId: string, outputs: Array<{ sessionId: string, path: string }> }>}
+   * @returns {Promise<{ sessionId: string, ubiquitousLanguage: object[], domainEvents: object[], commands: object[], policies: object[], aggregates: object[], boundedContexts: object[], openQuestions: string[], mermaid: { eventStorm: string, contextMap?: string } }>}
    */
   async runSession(request) {
     const sessionId = request.sessionId ?? crypto.randomUUID();
@@ -41,6 +48,7 @@ class ClaudeCodeEventstormAdapter extends IEventstormFacilitationPort {
     }
 
     const artifactDir = `docs/eventstorm/${sessionId}`;
+    const artifactPath = path.join(this.projectRoot, artifactDir);
     const prompt = [
       'Run an EventStorm session on the following input.',
       `Session ID: ${sessionId}`,
@@ -50,7 +58,9 @@ class ClaudeCodeEventstormAdapter extends IEventstormFacilitationPort {
       rawText.trim(),
     ].join('\n');
 
-    const result = await this._runClaudeAgent(prompt);
+    const result = this._runClaudeAgentInject
+      ? await this._runClaudeAgentInject(prompt)
+      : await this._runClaudeAgent(prompt);
     if (!result.ok) {
       const err = new Error(`Claude Code eventstorm agent failed: ${result.stderr || result.error || 'non-zero exit'}`);
       err.exitCode = result.exitCode;
@@ -59,23 +69,44 @@ class ClaudeCodeEventstormAdapter extends IEventstormFacilitationPort {
       throw err;
     }
 
-    const outputs = [
-      '00-plan.md',
-      '01-context.md',
-      '02-domain-glossary.md',
-      '03-events-commands.md',
-      '04-aggregates.md',
-      '05-bounded-contexts.md',
-      '06-diagrams.mmd',
-      '07-specs.md',
-      '08-qa.md',
-      'summary.json',
-    ].map((relativePath) => ({
-      sessionId,
-      path: path.join(this.projectRoot, artifactDir, relativePath),
-    }));
+    const summaryPath = path.join(artifactPath, 'summary.json');
+    const readFileFn = this._readFileInject || fs.readFile.bind(fs);
+    let rawSummary;
+    try {
+      rawSummary = JSON.parse(await readFileFn(summaryPath, 'utf8'));
+    } catch (e) {
+      throw new Error(`eventstorm: failed to read or parse summary.json: ${e.message}`);
+    }
 
-    return { sessionId, outputs };
+    const valid = this._validate(rawSummary);
+    if (!valid) {
+      const errors = (this._validate.errors || []).map((e) => `${e.instancePath} ${e.message}`).join('; ');
+      throw new Error(`eventstorm: summary.json schema validation failed: ${errors}`);
+    }
+
+    let mermaidEventStorm = '';
+    let mermaidContextMap = '';
+    try {
+      const diagramsPath = path.join(artifactPath, '06-diagrams.mmd');
+      const content = await readFileFn(diagramsPath, 'utf8');
+      mermaidEventStorm = content;
+    } catch {
+      // 06-diagrams.mmd optional
+    }
+
+    const eventstormResult = {
+      sessionId,
+      ubiquitousLanguage: rawSummary.glossary || [],
+      domainEvents: rawSummary.events || [],
+      commands: rawSummary.commands || [],
+      policies: rawSummary.policies || [],
+      aggregates: rawSummary.aggregates || [],
+      boundedContexts: rawSummary.boundedContexts || [],
+      openQuestions: rawSummary.openQuestions || [],
+      mermaid: { eventStorm: mermaidEventStorm, contextMap: mermaidContextMap },
+    };
+
+    return eventstormResult;
   }
 
   /**

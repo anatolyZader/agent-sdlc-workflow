@@ -4,6 +4,7 @@ const Fastify = require('fastify');
 const path = require('path');
 const { createContainer } = require('./compositionRoot');
 const registerRoutes = require('./routes');
+const { registerAuth } = require('./auth');
 
 const projectRoot = path.resolve(__dirname, '..', '..');
 
@@ -14,6 +15,7 @@ async function main() {
   const app = Fastify({ logger: true });
 
   await app.register(require('@fastify/jwt'), { secret: config.jwtSecret });
+  await registerAuth(app, config);
 
   app.decorate('workflowStart', async (request, reply) => {
     try {
@@ -89,8 +91,8 @@ async function main() {
   });
 
   app.decorate('budgetPlan', async (request, reply) => {
-    const c = container.resolve('budgetController');
-    return c.plan(request);
+    const budgetPlan = container.resolve('budgetPlan');
+    return budgetPlan.getPlan(request.body || {});
   });
 
   app.decorate('tddRed', async (request, reply) => {
@@ -111,7 +113,7 @@ async function main() {
   await app.register(require(path.join(projectRoot, 'business_modules/lint/input/lintRouter')));
   await app.register(require(path.join(projectRoot, 'business_modules/secure/input/secureRouter')));
   await app.register(require(path.join(projectRoot, 'business_modules/doc/input/docRouter')));
-  await app.register(require(path.join(projectRoot, 'business_modules/budget/input/budgetRouter')));
+  await app.register(require(path.join(projectRoot, 'src/app/budgetRoute')));
 
   await app.listen({ port: config.port, host: config.host });
 }

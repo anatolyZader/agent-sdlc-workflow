@@ -157,6 +157,41 @@ describe('WorkflowService', () => {
       assert.strictEqual(savedRun.status, 'failed');
       assert.strictEqual(savedRun.currentStep, 'eventstorm');
     });
+
+    it('advances run when beads step returns failed (fail-open)', async () => {
+      const plan = [
+        { name: 'spec', mode: 'auto' },
+        { name: 'plan', mode: 'auto' },
+        { name: 'beads', mode: 'auto' },
+        { name: 'tdd_red', mode: 'manualCheckpoint' },
+      ];
+      const run = {
+        id: 'wf-beads',
+        featureTitle: 'x',
+        status: 'running',
+        currentStep: 'beads',
+        completedSteps: ['spec', 'plan'],
+        artifacts: {},
+        planJson: plan,
+        currentStepRetries: 0,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      let savedRun;
+      const repo = {
+        save: async () => {},
+        get: async (id) => (id === 'wf-beads' ? (savedRun ? { ...savedRun } : { ...run }) : null),
+        update: async (r) => { savedRun = r; },
+      };
+      const beadsFailingExecutor = { runStep: async () => ({ status: 'failed', artifacts: [], errors: ['bd not found'] }) };
+      const service = new WorkflowService(deps({ workflowRepo: repo, stepExecutor: beadsFailingExecutor }));
+      const result = await service.resumeWorkflow('wf-beads');
+      assert.strictEqual(result.status, 'running');
+      assert.ok(result.completedSteps.includes('beads'));
+      assert.strictEqual(result.currentStep, 'tdd_red');
+      assert.strictEqual(savedRun.currentStep, 'tdd_red');
+      assert.strictEqual(savedRun.status, 'running');
+    });
   });
 
   describe('abortWorkflow', () => {

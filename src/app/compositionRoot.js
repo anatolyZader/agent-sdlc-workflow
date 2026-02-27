@@ -37,6 +37,11 @@ function createContainer() {
       artifactStorePath: process.env.ARTIFACT_STORE_PATH,
       useSpecKitPackage: process.env.USE_SPEC_KIT_PACKAGE === '1' || process.env.USE_SPEC_KIT_PACKAGE === 'true',
       specifyAutoInit: process.env.SPECIFY_AUTO_INIT === '1' || process.env.SPECIFY_AUTO_INIT === 'true',
+      planStepEnabled: process.env.PLAN_STEP_ENABLED !== '0',
+      oauth2ClientId: process.env.OAUTH2_CLIENT_ID,
+      oauth2ClientSecret: process.env.OAUTH2_CLIENT_SECRET,
+      oauth2CallbackBaseUrl: process.env.OAUTH2_CALLBACK_BASE_URL,
+      oauth2Provider: process.env.OAUTH2_PROVIDER || 'google',
     }),
   });
 
@@ -67,7 +72,7 @@ function createContainer() {
     }).singleton(),
     clock: awilix.asClass(systemClock.SystemClockAdapter).singleton(),
     workflowService: awilix.asFunction(
-      ({ workflowRepo, stepExecutor, artifactStore, clock, config, workflowBeadsPort }) =>
+      ({ workflowRepo, stepExecutor, artifactStore, clock, config, workflowBeadsPort, budgetPlan }) =>
         new workflowServiceModule.WorkflowService({
           workflowRepo,
           stepExecutor,
@@ -75,6 +80,7 @@ function createContainer() {
           clock,
           config,
           workflowBeadsPort,
+          budgetPlan,
         })
     ).singleton(),
     workflowController: awilix.asClass(workflowControllerModule.WorkflowController).singleton(),
@@ -166,14 +172,10 @@ function createContainer() {
     tddController: awilix.asClass(tddControllerModule.TddController).singleton(),
   });
 
-  // Budget module
-  const budgetPlanAdapter = require(path.join(projectRoot, 'business_modules/budget/infrastructure/adapters/budgetPlanAdapter'));
-  const budgetServiceModule = require(path.join(projectRoot, 'business_modules/budget/app/budgetService'));
-  const budgetControllerModule = require(path.join(projectRoot, 'business_modules/budget/app/budgetController'));
+  // Budget (cross-cut): used by workflow and optionally by a thin /api/budget/plan route
+  const budgetCrossCut = require(path.join(projectRoot, 'src/cross-cut-modules/budget'));
   container.register({
-    budgetPlanPort: awilix.asClass(budgetPlanAdapter.BudgetPlanAdapter).singleton(),
-    budgetService: awilix.asClass(budgetServiceModule.BudgetService).singleton(),
-    budgetController: awilix.asClass(budgetControllerModule.BudgetController).singleton(),
+    budgetPlan: awilix.asValue({ getPlan: budgetCrossCut.getPlan }),
   });
 
   // Step executor: run workflow steps in-process (after all step controllers are registered)

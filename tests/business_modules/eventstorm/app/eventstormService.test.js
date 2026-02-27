@@ -7,13 +7,17 @@ const { EventstormService } = require(path.join(__dirname, '../../../../business
 
 describe('EventstormService', () => {
   describe('runSession', () => {
-    it('returns sessionId and outputs from facilitation port', async () => {
+    it('returns EventstormResult (sessionId, domainEvents, commands, etc.) from facilitation port', async () => {
       const mockResult = {
         sessionId: 'test-session-123',
-        outputs: [
-          { sessionId: 'test-session-123', path: '/repo/docs/eventstorm/test-session-123/01-context.md' },
-          { sessionId: 'test-session-123', path: '/repo/docs/eventstorm/test-session-123/summary.json' },
-        ],
+        ubiquitousLanguage: [{ term: 'Refund', definition: 'Money returned to customer' }],
+        domainEvents: [{ name: 'RefundRequested', description: '' }],
+        commands: [{ name: 'RequestRefund' }],
+        policies: [],
+        aggregates: [{ name: 'RefundCase', invariants: [], ownsCommands: [], emitsEvents: [] }],
+        boundedContexts: [{ name: 'Billing', responsibilities: [], integrations: [] }],
+        openQuestions: [],
+        mermaid: { eventStorm: 'flowchart LR', contextMap: '' },
       };
       const port = {
         runSession: async () => mockResult,
@@ -24,9 +28,12 @@ describe('EventstormService', () => {
         problemStatement: 'Customers cannot understand refunds',
       });
       assert.strictEqual(result.sessionId, 'test-session-123');
-      assert.ok(Array.isArray(result.outputs));
-      assert.strictEqual(result.outputs.length, 2);
-      assert.strictEqual(result.outputs[0].path, '/repo/docs/eventstorm/test-session-123/01-context.md');
+      assert.ok(Array.isArray(result.domainEvents));
+      assert.ok(Array.isArray(result.commands));
+      assert.ok(Array.isArray(result.aggregates));
+      assert.ok(Array.isArray(result.boundedContexts));
+      assert.ok(Array.isArray(result.openQuestions));
+      assert.ok(result.mermaid && typeof result.mermaid.eventStorm === 'string');
     });
 
     it('delegates to facilitation port with request (rawText or domainName+problemStatement)', async () => {
@@ -34,7 +41,17 @@ describe('EventstormService', () => {
       const port = {
         runSession: async (req) => {
           receivedRequest = req;
-          return { sessionId: 'sid', outputs: [] };
+          return {
+            sessionId: 'sid',
+            ubiquitousLanguage: [],
+            domainEvents: [],
+            commands: [],
+            policies: [],
+            aggregates: [],
+            boundedContexts: [],
+            openQuestions: [],
+            mermaid: { eventStorm: '', contextMap: '' },
+          };
         },
       };
       const service = new EventstormService(port);
