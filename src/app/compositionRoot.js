@@ -94,13 +94,26 @@ function createContainer() {
     beadsController: awilix.asClass(beadsControllerModule.BeadsController).singleton(),
   });
 
-  // Eventstorm module
+  // Eventstorm module (adapter optionally takes runClaudeAgent/readFile; undefined => use built-in)
   const claudeEventstorm = require(path.join(projectRoot, 'business_modules/eventstorm/infrastructure/adapters/claudeCodeEventstormAdapter'));
   const eventstormServiceModule = require(path.join(projectRoot, 'business_modules/eventstorm/app/eventstormService'));
   const eventstormControllerModule = require(path.join(projectRoot, 'business_modules/eventstorm/app/eventstormController'));
   container.register({
+    runClaudeAgent: awilix.asValue(undefined),
+    readFile: awilix.asValue(undefined),
+    claudeCommand: awilix.asValue('claude'),
     eventstormFacilitationPort: awilix.asClass(claudeEventstorm.ClaudeCodeEventstormAdapter).singleton(),
-    eventstormService: awilix.asClass(eventstormServiceModule.EventstormService).singleton(),
+    eventstormService: awilix.asFunction(
+      ({ eventstormFacilitationPort }) =>
+        new eventstormServiceModule.EventstormService(eventstormFacilitationPort)
+    ).singleton(),
+    // PROXY mode: eventstormService is a proxy; .runSession triggers resolve('runSession'). Register it.
+    runSession: awilix.asFunction(
+      ({ eventstormFacilitationPort }) => {
+        const s = new eventstormServiceModule.EventstormService(eventstormFacilitationPort);
+        return s.runSession.bind(s);
+      }
+    ).singleton(),
     eventstormController: awilix.asClass(eventstormControllerModule.EventstormController).singleton(),
   });
 

@@ -1,5 +1,10 @@
 'use strict';
 
+/**
+ * Port for reading/writing eventstorm session artifacts (e.g. markdown, summary).
+ * Reserved for future use; no adapter implements this port yet. The Claude Code adapter
+ * currently writes to docs/eventstorm/<sessionId>/ via the CLI and reads summary.json directly.
+ */
 function IEventstormArtifactStorePort() {
   if (new.target === IEventstormArtifactStorePort) {
     throw new Error('IEventstormArtifactStorePort is abstract');

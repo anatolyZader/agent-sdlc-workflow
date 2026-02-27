@@ -3,6 +3,12 @@
 const { buildDefaultStepPlan } = require('./stepPlanFactory');
 const { runGate } = require('./gates/gateRunner');
 
+// #region agent log
+function debugLog(location, message, data, hypothesisId) {
+  fetch('http://localhost:7342/ingest/a9a09807-76ad-4501-86e6-c73a8c40a8de', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '873b10' }, body: JSON.stringify({ sessionId: '873b10', location, message, data: data || {}, hypothesisId, timestamp: Date.now() }) }).catch(() => {});
+}
+// #endregion
+
 const MAX_STEP_RETRIES_DEFAULT = 2;
 
 class WorkflowService {
@@ -58,6 +64,9 @@ class WorkflowService {
   }
 
   async resumeWorkflow(runId) {
+    // #region agent log
+    debugLog('workflowService.js:resume-entry', 'resumeWorkflow called', { runId }, 'H4,H5');
+    // #endregion
     const run = await this.workflowRepo.get(runId);
     if (!run) {
       throw new Error('Run not found');
@@ -81,6 +90,9 @@ class WorkflowService {
       };
     }
     const step = plan[currentIndex];
+    // #region agent log
+    debugLog('workflowService.js:step-before', 'about to runStep', { currentStep: run.currentStep, stepName: step?.name }, 'H4');
+    // #endregion
     if (step.mode === 'manualCheckpoint') {
       const updated = {
         ...run,
@@ -101,6 +113,9 @@ class WorkflowService {
       workflowRunId: run.id,
       inputs: { run, plan },
     });
+    // #region agent log
+    debugLog('workflowService.js:step-after', 'runStep returned', { currentStep: run.currentStep, resultStatus: result?.status }, 'H4');
+    // #endregion
     if (run.currentStep === 'beads' && result.status === 'failed') {
       result = {
         status: 'ok',
@@ -116,6 +131,7 @@ class WorkflowService {
         stepName: run.currentStep,
         artifacts: run.artifacts || {},
         jsonPayload: result.rawResult,
+        projectRoot: this.config?.projectRoot ?? process.cwd(),
       };
       for (const gate of step.exitCriteria) {
         const gateResult = await runGate(gate, context);
@@ -133,7 +149,9 @@ class WorkflowService {
     const artifacts = { ...(run.artifacts || {}) };
     if (result.artifacts?.length) {
       for (const a of result.artifacts) {
-        if (a.type) artifacts[a.type] = a.path ?? a;
+        if (a.type) {
+          artifacts[a.type] = { type: a.type, path: a.path ?? null, meta: a.meta ?? {} };
+        }
       }
     }
     const now = this.clock.now();
@@ -144,7 +162,9 @@ class WorkflowService {
     const currentRetries = run.currentStepRetries ?? 0;
 
     if (result.status === 'failed') {
-      if (currentRetries < maxRetries) {
+      const doNotRetryTypes = this.config?.doNotRetryErrorTypes ?? ['schema_invalid'];
+      const doNotRetry = Array.isArray(doNotRetryTypes) && result.errorType != null && doNotRetryTypes.includes(result.errorType);
+      if (!doNotRetry && currentRetries < maxRetries) {
         const updated = {
           ...run,
           currentStepRetries: currentRetries + 1,

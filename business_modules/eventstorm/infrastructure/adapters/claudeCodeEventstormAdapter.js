@@ -17,16 +17,21 @@ class ClaudeCodeEventstormAdapter extends IEventstormFacilitationPort {
    * @param {object} deps
    * @param {object} deps.config - app config with projectRoot
    * @param {string} [deps.claudeCommand='claude'] - CLI command (path or "claude")
+   * @param {Function} [deps.writeFile] - optional; if provided used for writing input.txt, else fs.writeFile
    */
-  constructor({ config, claudeCommand = 'claude', runClaudeAgent, readFile }) {
+  constructor({ config, claudeCommand = 'claude', runClaudeAgent, readFile, writeFile }) {
     super();
     this.projectRoot = config?.projectRoot ?? process.cwd();
     this.claudeCommand = claudeCommand;
     this._runClaudeAgentInject = runClaudeAgent;
     this._readFileInject = readFile;
+    this._writeFileInject = writeFile;
     const schemaPath = path.join(__dirname, '..', 'summarySchema.json');
     this._schema = JSON.parse(require('node:fs').readFileSync(schemaPath, 'utf8'));
     this._validate = new Ajv({ strict: false }).compile(this._schema);
+    const boardSchemaPath = path.join(__dirname, '..', 'boardSchema.json');
+    this._boardSchema = JSON.parse(require('node:fs').readFileSync(boardSchemaPath, 'utf8'));
+    this._validateBoard = new Ajv({ strict: false }).compile(this._boardSchema);
   }
 
   /**
@@ -49,6 +54,9 @@ class ClaudeCodeEventstormAdapter extends IEventstormFacilitationPort {
 
     const artifactDir = `docs/eventstorm/${sessionId}`;
     const artifactPath = path.join(this.projectRoot, artifactDir);
+    await fs.mkdir(artifactPath, { recursive: true });
+    const writeFileFn = this._writeFileInject ?? fs.writeFile.bind(fs);
+    await writeFileFn(path.join(artifactPath, 'input.txt'), rawText.trim(), 'utf8').catch(() => {});
     const prompt = [
       'Run an EventStorm session on the following input.',
       `Session ID: ${sessionId}`,
@@ -60,49 +68,79 @@ class ClaudeCodeEventstormAdapter extends IEventstormFacilitationPort {
 
     const result = this._runClaudeAgentInject
       ? await this._runClaudeAgentInject(prompt)
-      : await this._runClaudeAgent(prompt);
+      : await this._runClaudeAgent(prompt, request.signal);
     if (!result.ok) {
-      const err = new Error(`Claude Code eventstorm agent failed: ${result.stderr || result.error || 'non-zero exit'}`);
+      const reason = result.stderr || result.error || 'non-zero exit';
+      const stderrSnippet =
+        result.stderr && reason !== result.stderr ? ` stderr: ${String(result.stderr).slice(0, 500)}` : '';
+      const err = new Error(`Claude Code eventstorm agent failed: ${reason}${stderrSnippet}`);
       err.exitCode = result.exitCode;
       err.stdout = result.stdout;
       err.stderr = result.stderr;
+      err.errorType = 'cli_exit';
       throw err;
     }
 
-    const summaryPath = path.join(artifactPath, 'summary.json');
     const readFileFn = this._readFileInject || fs.readFile.bind(fs);
-    let rawSummary;
+    const boardPath = path.join(artifactPath, 'board.json');
+    let source;
     try {
-      rawSummary = JSON.parse(await readFileFn(summaryPath, 'utf8'));
-    } catch (e) {
-      throw new Error(`eventstorm: failed to read or parse summary.json: ${e.message}`);
+      const rawBoard = JSON.parse(await readFileFn(boardPath, 'utf8'));
+      if (this._validateBoard(rawBoard)) {
+        const { validateBoard } = require('../../app/boardValidator');
+        const validation = validateBoard(rawBoard);
+        if (validation.valid) {
+          source = rawBoard;
+        }
+      }
+    } catch {
+      // board.json missing or invalid; fall back to summary.json
     }
 
-    const valid = this._validate(rawSummary);
-    if (!valid) {
-      const errors = (this._validate.errors || []).map((e) => `${e.instancePath} ${e.message}`).join('; ');
-      throw new Error(`eventstorm: summary.json schema validation failed: ${errors}`);
+    if (!source) {
+      const summaryPath = path.join(artifactPath, 'summary.json');
+      let rawSummary;
+      try {
+        rawSummary = JSON.parse(await readFileFn(summaryPath, 'utf8'));
+      } catch (e) {
+        const err = new Error(`eventstorm: failed to read or parse summary.json: ${e.message}`);
+        err.errorType = 'io_missing';
+        throw err;
+      }
+      const valid = this._validate(rawSummary);
+      if (!valid) {
+        const errors = (this._validate.errors || []).map((e) => `${e.instancePath} ${e.message}`).join('; ');
+        const err = new Error(`eventstorm: summary.json schema validation failed: ${errors}`);
+        err.errorType = 'schema_invalid';
+        throw err;
+      }
+      source = rawSummary;
     }
 
     let mermaidEventStorm = '';
     let mermaidContextMap = '';
     try {
       const diagramsPath = path.join(artifactPath, '06-diagrams.mmd');
-      const content = await readFileFn(diagramsPath, 'utf8');
-      mermaidEventStorm = content;
+      mermaidEventStorm = await readFileFn(diagramsPath, 'utf8');
     } catch {
       // 06-diagrams.mmd optional
+    }
+    try {
+      const contextMapPath = path.join(artifactPath, '07-context-map.mmd');
+      mermaidContextMap = await readFileFn(contextMapPath, 'utf8');
+    } catch {
+      // 07-context-map.mmd optional
     }
 
     const eventstormResult = {
       sessionId,
-      ubiquitousLanguage: rawSummary.glossary || [],
-      domainEvents: rawSummary.events || [],
-      commands: rawSummary.commands || [],
-      policies: rawSummary.policies || [],
-      aggregates: rawSummary.aggregates || [],
-      boundedContexts: rawSummary.boundedContexts || [],
-      openQuestions: rawSummary.openQuestions || [],
+      ubiquitousLanguage: source.glossary || [],
+      domainEvents: source.events || [],
+      commands: source.commands || [],
+      policies: source.policies || [],
+      aggregates: source.aggregates || [],
+      boundedContexts: source.boundedContexts || [],
+      openQuestions: source.openQuestions || [],
       mermaid: { eventStorm: mermaidEventStorm, contextMap: mermaidContextMap },
     };
 
@@ -132,10 +170,18 @@ class ClaudeCodeEventstormAdapter extends IEventstormFacilitationPort {
 
   /**
    * @param {string} prompt
+   * @param {AbortSignal} [signal] - when aborted, kills the child process and rejects with Step timeout
    * @returns {Promise<{ ok: boolean, exitCode?: number, stdout?: string, stderr?: string, error?: string }>}
    */
-  _runClaudeAgent(prompt) {
-    return new Promise((resolve) => {
+  _runClaudeAgent(prompt, signal) {
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const finish = (fn) => {
+        if (!settled) {
+          settled = true;
+          fn();
+        }
+      };
       const args = ['--agent', 'eventstorm-coordinator', '-p', prompt];
       const child = spawn(this.claudeCommand, args, {
         cwd: this.projectRoot,
@@ -145,20 +191,41 @@ class ClaudeCodeEventstormAdapter extends IEventstormFacilitationPort {
 
       let stdout = '';
       let stderr = '';
-      child.stdout?.on('data', (chunk) => { stdout += chunk; });
-      child.stderr?.on('data', (chunk) => { stderr += chunk; });
+      child.stdout?.on('data', (chunk) => { stdout += chunk.toString('utf8'); });
+      child.stderr?.on('data', (chunk) => { stderr += chunk.toString('utf8'); });
+
+      const onAbort = () => {
+        try {
+          child.kill('SIGTERM');
+        } catch (_) {}
+        const t = setTimeout(() => {
+          try {
+            child.kill('SIGKILL');
+          } catch (_) {}
+        }, 5000);
+        child.once('close', () => clearTimeout(t));
+        const timeoutErr = new Error('Step timeout');
+        timeoutErr.errorType = 'timeout';
+        if (signal) signal.removeEventListener('abort', onAbort);
+        finish(() => reject(timeoutErr));
+      };
+      if (signal) signal.addEventListener('abort', onAbort);
 
       child.on('error', (err) => {
-        resolve({ ok: false, error: err.message, stdout, stderr });
+        if (signal) signal.removeEventListener('abort', onAbort);
+        finish(() => resolve({ ok: false, error: err.message, stdout, stderr }));
       });
 
       child.on('close', (exitCode) => {
-        resolve({
-          ok: exitCode === 0,
-          exitCode: exitCode ?? undefined,
-          stdout: stdout.trim() || undefined,
-          stderr: stderr.trim() || undefined,
-        });
+        if (signal) signal.removeEventListener('abort', onAbort);
+        finish(() =>
+          resolve({
+            ok: exitCode === 0,
+            exitCode: exitCode ?? undefined,
+            stdout: stdout.trim() || undefined,
+            stderr: stderr.trim() || undefined,
+          })
+        );
       });
     });
   }

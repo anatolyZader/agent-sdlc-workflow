@@ -132,6 +132,7 @@ describe('WorkflowService', () => {
         completedSteps: [],
         artifacts: {},
         currentStepRetries: 0,
+        planJson: [{ name: 'eventstorm', mode: 'auto' }],
         createdAt: new Date(),
         updatedAt: new Date(),
       };
@@ -156,6 +157,118 @@ describe('WorkflowService', () => {
       assert.strictEqual(r3.status, 'failed');
       assert.strictEqual(savedRun.status, 'failed');
       assert.strictEqual(savedRun.currentStep, 'eventstorm');
+    });
+
+    it('does not retry when step returns errorType schema_invalid', async () => {
+      const run = {
+        id: 'wf-1',
+        featureTitle: 'x',
+        status: 'running',
+        currentStep: 'eventstorm',
+        completedSteps: [],
+        artifacts: {},
+        currentStepRetries: 0,
+        planJson: [{ name: 'eventstorm', mode: 'auto' }],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      let savedRun;
+      const repo = {
+        save: async () => {},
+        get: async (id) => (id === 'wf-1' ? (savedRun ? { ...savedRun } : { ...run }) : null),
+        update: async (r) => { savedRun = r; },
+      };
+      const schemaInvalidExecutor = {
+        runStep: async () => ({
+          status: 'failed',
+          artifacts: [],
+          errors: ['summary.json schema validation failed'],
+          errorType: 'schema_invalid',
+        }),
+      };
+      const service = new WorkflowService(deps({
+        workflowRepo: repo,
+        stepExecutor: schemaInvalidExecutor,
+        config: { maxStepRetries: 2 },
+      }));
+      const result = await service.resumeWorkflow('wf-1');
+      assert.strictEqual(result.status, 'failed');
+      assert.strictEqual(savedRun.status, 'failed');
+      assert.strictEqual(savedRun.currentStepRetries, 0);
+    });
+
+    it('retries when step returns errorType cli_exit (default config)', async () => {
+      const run = {
+        id: 'wf-1',
+        featureTitle: 'x',
+        status: 'running',
+        currentStep: 'eventstorm',
+        completedSteps: [],
+        artifacts: {},
+        currentStepRetries: 0,
+        planJson: [{ name: 'eventstorm', mode: 'auto' }],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      let savedRun;
+      const repo = {
+        save: async () => {},
+        get: async (id) => (id === 'wf-1' ? (savedRun ? { ...savedRun } : { ...run }) : null),
+        update: async (r) => { savedRun = r; },
+      };
+      const cliExitExecutor = {
+        runStep: async () => ({
+          status: 'failed',
+          artifacts: [],
+          errors: ['Claude CLI non-zero exit'],
+          errorType: 'cli_exit',
+        }),
+      };
+      const service = new WorkflowService(deps({
+        workflowRepo: repo,
+        stepExecutor: cliExitExecutor,
+        config: { maxStepRetries: 2 },
+      }));
+      const r1 = await service.resumeWorkflow('wf-1');
+      assert.strictEqual(r1.status, 'running');
+      assert.strictEqual(savedRun.currentStepRetries, 1);
+    });
+
+    it('does not retry cli_exit when doNotRetryErrorTypes includes cli_exit', async () => {
+      const run = {
+        id: 'wf-1',
+        featureTitle: 'x',
+        status: 'running',
+        currentStep: 'eventstorm',
+        completedSteps: [],
+        artifacts: {},
+        currentStepRetries: 0,
+        planJson: [{ name: 'eventstorm', mode: 'auto' }],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      let savedRun;
+      const repo = {
+        save: async () => {},
+        get: async (id) => (id === 'wf-1' ? (savedRun ? { ...savedRun } : { ...run }) : null),
+        update: async (r) => { savedRun = r; },
+      };
+      const cliExitExecutor = {
+        runStep: async () => ({
+          status: 'failed',
+          artifacts: [],
+          errors: ['Claude CLI non-zero exit'],
+          errorType: 'cli_exit',
+        }),
+      };
+      const service = new WorkflowService(deps({
+        workflowRepo: repo,
+        stepExecutor: cliExitExecutor,
+        config: { maxStepRetries: 2, doNotRetryErrorTypes: ['schema_invalid', 'cli_exit'] },
+      }));
+      const result = await service.resumeWorkflow('wf-1');
+      assert.strictEqual(result.status, 'failed');
+      assert.strictEqual(savedRun.currentStepRetries, 0);
     });
 
     it('advances run when beads step returns failed (fail-open)', async () => {

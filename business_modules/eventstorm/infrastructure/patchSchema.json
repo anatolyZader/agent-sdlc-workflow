@@ -1,0 +1,19 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "description": "Per-section patch for EventStorm board. Each key: { add, remove, update } arrays.",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "glossary": { "type": "object", "properties": { "add": { "type": "array" }, "remove": { "type": "array", "items": { "type": "string" } }, "update": { "type": "array" } } },
+    "commands": { "type": "object", "properties": { "add": { "type": "array" }, "remove": { "type": "array", "items": { "type": "string" } }, "update": { "type": "array" } } },
+    "events": { "type": "object", "properties": { "add": { "type": "array" }, "remove": { "type": "array", "items": { "type": "string" } }, "update": { "type": "array" } } },
+    "policies": { "type": "object", "properties": { "add": { "type": "array" }, "remove": { "type": "array", "items": { "type": "string" } }, "update": { "type": "array" } } },
+    "aggregates": { "type": "object", "properties": { "add": { "type": "array" }, "remove": { "type": "array", "items": { "type": "string" } }, "update": { "type": "array" } } },
+    "boundedContexts": { "type": "object", "properties": { "add": { "type": "array" }, "remove": { "type": "array", "items": { "type": "string" } }, "update": { "type": "array" } } },
+    "openQuestions": { "type": "object", "properties": { "add": { "type": "array", "items": { "type": "string" } }, "remove": { "type": "array", "items": { "type": "string" } } } },
+    "conflicts": { "type": "object", "properties": { "add": { "type": "array", "items": { "type": "string" } }, "remove": { "type": "array", "items": { "type": "string" } } } },
+    "decisions": { "type": "object", "properties": { "add": { "type": "array" } } },
+    "assumptions": { "type": "object", "properties": { "add": { "type": "array" }, "remove": { "type": "array", "items": { "type": "string" } } } },
+    "neededInfo": { "type": "object", "properties": { "add": { "type": "array", "items": { "type": "string" } }, "remove": { "type": "array", "items": { "type": "string" } } } }
+  }
+}

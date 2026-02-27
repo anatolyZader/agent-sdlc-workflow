@@ -18,6 +18,7 @@ class EventstormController {
       constraints: body.constraints,
       timeboxMinutes: body.timeboxMinutes,
       contextSnippets: body.contextSnippets,
+      signal: request.signal,
     });
   }
 }

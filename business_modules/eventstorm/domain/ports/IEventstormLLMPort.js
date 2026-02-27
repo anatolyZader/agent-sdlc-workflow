@@ -1,5 +1,10 @@
 'use strict';
 
+/**
+ * Port for LLM completion (system/user prompts). Reserved for future use; no adapter
+ * implements this port yet. The Claude Code adapter runs the eventstorm-coordinator
+ * agent via CLI instead of calling an LLM API directly.
+ */
 function IEventstormLLMPort() {
   if (new.target === IEventstormLLMPort) {
     throw new Error('IEventstormLLMPort is abstract');

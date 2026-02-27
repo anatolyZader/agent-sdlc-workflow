@@ -18,7 +18,7 @@ module.exports = fp(async function eventstormRouter(fastify, opts) {
           problemStatement: { type: 'string', minLength: 1 },
           constraints: { type: 'array', items: { type: 'string' } },
           timeboxMinutes: { type: 'number', minimum: 1 },
-          contextSnippets: { type: 'array' },
+          contextSnippets: { type: 'array', items: { type: 'string' } },
         },
         additionalProperties: false,
       },

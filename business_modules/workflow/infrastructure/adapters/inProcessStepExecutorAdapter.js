@@ -42,18 +42,22 @@ class InProcessStepExecutorAdapter extends IWorkflowStepExecutorPort {
     if (!controller) {
       return { status: 'failed', artifacts: [], metrics: { durationMs: 0 }, errors: [`Unknown step: ${stepName}`] };
     }
-    const request = { body: this._bodyForStep(stepName, run) };
+    const timeoutMs = this.stepTimeoutMs;
+    let signal;
+    let timeoutId;
+    if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function') {
+      signal = AbortSignal.timeout(timeoutMs);
+    } else {
+      const ac = new AbortController();
+      signal = ac.signal;
+      timeoutId = setTimeout(() => ac.abort(), timeoutMs);
+    }
+    const request = { body: this._bodyForStep(stepName, run), signal };
     const start = Date.now();
     try {
-      const timeoutMs = this.stepTimeoutMs;
-      const result = await Promise.race([
-        controller.run(request),
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Step timeout')), timeoutMs)
-        ),
-      ]);
+      const result = await controller.run(request);
       const durationMs = Date.now() - start;
-      return this._toEnvelope(result, durationMs);
+      return this._toEnvelope(stepName, result, durationMs);
     } catch (err) {
       const durationMs = Date.now() - start;
       return {
@@ -62,8 +66,25 @@ class InProcessStepExecutorAdapter extends IWorkflowStepExecutorPort {
         metrics: { durationMs },
         errors: [err.message || String(err)],
         logs: [],
+        errorType: err.errorType,
       };
+    } finally {
+      if (timeoutId != null) clearTimeout(timeoutId);
     }
+  }
+
+  /**
+   * Resolves artifact path or legacy value for downstream steps. Supports normalized shape
+   * { type, path, meta } and legacy string path. Returns undefined when the artifact is not provided or has no path.
+   * @param {object} artifacts - run.artifacts
+   * @param {string} type - artifact type (e.g. 'eventstorm', 'c4', 'spec')
+   * @returns {string|object|undefined} path string, or legacy artifact value, or undefined
+   */
+  _getArtifactPath(artifacts, type) {
+    const a = artifacts[type];
+    if (a == null) return undefined;
+    if (typeof a === 'object' && a !== null && 'path' in a) return a.path ?? undefined;
+    return a;
   }
 
   _bodyForStep(stepName, run) {
@@ -78,40 +99,57 @@ class InProcessStepExecutorAdapter extends IWorkflowStepExecutorPort {
           ...base,
         };
       case 'c4':
-        return { eventstormArtifacts: artifacts.eventstorm, ...base };
+        return { eventstormArtifacts: this._getArtifactPath(artifacts, 'eventstorm'), ...base };
       case 'spec':
         return {
-          eventstormArtifacts: artifacts.eventstorm,
-          c4Artifacts: artifacts.c4,
+          eventstormArtifacts: this._getArtifactPath(artifacts, 'eventstorm'),
+          c4Artifacts: this._getArtifactPath(artifacts, 'c4'),
           featureTitle: r.featureTitle,
           ...base,
         };
       case 'plan':
         return {
-          specArtifacts: artifacts.spec,
+          specArtifacts: this._getArtifactPath(artifacts, 'spec'),
           featureTitle: r.featureTitle,
           ...base,
         };
       case 'beads':
         return {
-          planArtifacts: artifacts.plan,
+          planArtifacts: this._getArtifactPath(artifacts, 'plan'),
           featureTitle: r.featureTitle,
           ...base,
         };
       case 'tdd_red':
-        return { phase: 'red', specArtifacts: artifacts.spec, eventstormArtifacts: artifacts.eventstorm, ...base };
+        return {
+          phase: 'red',
+          specArtifacts: this._getArtifactPath(artifacts, 'spec'),
+          eventstormArtifacts: this._getArtifactPath(artifacts, 'eventstorm'),
+          ...base,
+        };
       case 'tdd_green':
-        return { phase: 'green', specArtifacts: artifacts.spec, eventstormArtifacts: artifacts.eventstorm, ...base };
+        return {
+          phase: 'green',
+          specArtifacts: this._getArtifactPath(artifacts, 'spec'),
+          eventstormArtifacts: this._getArtifactPath(artifacts, 'eventstorm'),
+          ...base,
+        };
       case 'lint':
       case 'secure':
       case 'doc':
-        return { ...artifacts, ...base };
+        return {
+          eventstormArtifacts: this._getArtifactPath(artifacts, 'eventstorm'),
+          c4Artifacts: this._getArtifactPath(artifacts, 'c4'),
+          specArtifacts: this._getArtifactPath(artifacts, 'spec'),
+          planArtifacts: this._getArtifactPath(artifacts, 'plan'),
+          beadsArtifacts: this._getArtifactPath(artifacts, 'beads'),
+          ...base,
+        };
       default:
         return base;
     }
   }
 
-  _toEnvelope(result, durationMs) {
+  _toEnvelope(stepName, result, durationMs) {
     const baseMetrics = { durationMs };
     if (result && typeof result.metrics === 'object' && result.metrics != null) {
       if (result.metrics.charsIn != null) baseMetrics.charsIn = result.metrics.charsIn;
@@ -126,9 +164,27 @@ class InProcessStepExecutorAdapter extends IWorkflowStepExecutorPort {
         logs: result.logs || [],
       };
     }
+    // Eventstorm step returns EventstormResult (no status/artifacts); expose path for downstream steps.
+    if (stepName === 'eventstorm') {
+      const hasSessionId = result && typeof result.sessionId === 'string' && result.sessionId.trim() !== '';
+      if (!hasSessionId) {
+        return {
+          status: 'failed',
+          artifacts: [],
+          metrics: { ...baseMetrics },
+          errors: ['Eventstorm result missing sessionId'],
+          logs: result?.logs || [],
+          rawResult: result,
+        };
+      }
+    }
+    let artifacts = [];
+    if (stepName === 'eventstorm' && result && typeof result.sessionId === 'string') {
+      artifacts = [{ type: 'eventstorm', path: `docs/eventstorm/${result.sessionId}/summary.json` }];
+    }
     return {
       status: 'ok',
-      artifacts: [],
+      artifacts,
       metrics: { ...baseMetrics },
       errors: [],
       logs: result?.logs || [],

@@ -1,11 +1,12 @@
 'use strict';
 
 const fs = require('fs').promises;
+const path = require('path');
 
 /**
  * Runs gate checks (fileExists, jsonValid, etc.) against step outputs.
  * @param {object} gate - { type: string, params?: object }
- * @param {object} context - { runId, stepName, artifacts?, path?, jsonPayload? }
+ * @param {object} context - { runId, stepName, artifacts?, path?, jsonPayload?, projectRoot? }
  * @returns {Promise<{ passed: boolean, message?: string }>}
  */
 async function runGate(gate, context) {
@@ -18,8 +19,10 @@ async function runGate(gate, context) {
       if (!pathToCheck || typeof pathToCheck !== 'string') {
         return { passed: false, message: 'Missing path' };
       }
+      const projectRoot = context?.projectRoot ?? process.cwd();
+      const resolved = path.isAbsolute(pathToCheck) ? pathToCheck : path.join(projectRoot, pathToCheck);
       try {
-        await fs.access(pathToCheck);
+        await fs.access(resolved);
         return { passed: true };
       } catch {
         return { passed: false, message: 'File not found' };
@@ -43,17 +46,39 @@ async function runGate(gate, context) {
     }
     case 'requiredKeys': {
       const payload = context?.jsonPayload;
-      const keys = gate.params?.keys;
-      if (!Array.isArray(keys) || keys.length === 0) {
+      const keysParam = gate.params?.keys;
+      if (!Array.isArray(keysParam) || keysParam.length === 0) {
         return { passed: false, message: 'Missing keys to check' };
       }
       if (payload === undefined || payload === null) {
         return { passed: false, message: 'No payload to validate' };
       }
       const obj = typeof payload === 'object' ? payload : {};
-      const missing = keys.filter((k) => !(k in obj));
+      // Normalize to [{ key, type?, subKey? }]; backward compatible with string keys
+      const entries = keysParam.map((el) => (typeof el === 'string' ? { key: el } : { key: el.key, type: el.type, subKey: el.subKey }));
+      const missing = [];
+      const shapeErrors = [];
+      for (const { key, type, subKey } of entries) {
+        const val = obj[key];
+        if (val === undefined || val === null) {
+          missing.push(key);
+          continue;
+        }
+        if (type === 'array' && !Array.isArray(val)) {
+          shapeErrors.push(`${key} must be an array`);
+        } else if (type === 'object') {
+          if (typeof val !== 'object' || val === null) {
+            shapeErrors.push(`${key} must be an object`);
+          } else if (subKey != null && (val[subKey] === undefined || val[subKey] === null)) {
+            shapeErrors.push(`${key} must have property '${subKey}'`);
+          }
+        }
+      }
       if (missing.length > 0) {
         return { passed: false, message: `Missing required keys: ${missing.join(', ')}` };
+      }
+      if (shapeErrors.length > 0) {
+        return { passed: false, message: shapeErrors.join('; ') };
       }
       return { passed: true };
     }

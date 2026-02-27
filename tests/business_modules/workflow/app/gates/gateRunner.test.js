@@ -46,5 +46,52 @@ describe('gateRunner', () => {
       assert.ok(result.message.includes('domainEvents') === false);
       assert.ok(result.message.includes('mermaid'));
     });
+
+    it('returns passed: false for requiredKeys when key exists but value is null', async () => {
+      const result = await runGate(
+        { type: 'requiredKeys', params: { keys: ['domainEvents', 'mermaid'] } },
+        { jsonPayload: { domainEvents: [], mermaid: null } }
+      );
+      assert.strictEqual(result.passed, false);
+      assert.ok(result.message.includes('mermaid'));
+    });
+
+    it('returns passed: true for requiredKeys with shape type array and object subKey', async () => {
+      const result = await runGate(
+        {
+          type: 'requiredKeys',
+          params: {
+            keys: [
+              { key: 'commands', type: 'array' },
+              { key: 'mermaid', type: 'object', subKey: 'eventStorm' },
+            ],
+          },
+        },
+        { jsonPayload: { commands: [], mermaid: { eventStorm: 'graph TD' } } }
+      );
+      assert.strictEqual(result.passed, true);
+    });
+
+    it('returns passed: false for requiredKeys when type or subKey check fails', async () => {
+      const result = await runGate(
+        {
+          type: 'requiredKeys',
+          params: { keys: [{ key: 'mermaid', type: 'object', subKey: 'eventStorm' }] },
+        },
+        { jsonPayload: { mermaid: {} } }
+      );
+      assert.strictEqual(result.passed, false);
+      assert.ok(result.message.includes('eventStorm'));
+    });
+
+    it('resolves relative path against projectRoot for fileExists', async () => {
+      const projectRoot = path.join(__dirname, '../../../../../');
+      const relativePath = 'package.json';
+      const result = await runGate(
+        { type: 'fileExists', params: { path: relativePath } },
+        { projectRoot }
+      );
+      assert.strictEqual(result.passed, true);
+    });
   });
 });

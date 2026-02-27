@@ -1,0 +1,38 @@
+{
+  "goal": "Clarify refund flow.",
+  "scope": { "in": ["Refunds"], "out": [] },
+  "actors": ["Customer", "Support"],
+  "glossary": [
+    { "term": "Refund", "definition": "Reversal of a charge credited back to the customer.", "synonyms": [] }
+  ],
+  "commands": [
+    { "name": "RequestRefund", "description": "Customer or support requests a refund", "actor": "Customer" },
+    { "name": "ApproveRefund", "description": "System approves refund", "actor": "TBD" }
+  ],
+  "events": [
+    { "name": "RefundRequested", "description": "A refund was requested" },
+    { "name": "RefundApproved", "description": "Refund was approved" }
+  ],
+  "policies": [
+    { "trigger": "RequestRefund", "condition": "amount <= original charge", "emits": ["RefundRequested"] },
+    { "trigger": "RefundRequested", "condition": "valid", "emits": ["RefundApproved"] }
+  ],
+  "aggregates": [
+    {
+      "name": "Refund",
+      "invariants": ["Refund amount must not exceed original charge"],
+      "ownsCommands": ["RequestRefund", "ApproveRefund"],
+      "emitsEvents": ["RefundRequested", "RefundApproved"]
+    }
+  ],
+  "boundedContexts": [
+    { "name": "Billing", "responsibilities": ["Refunds"], "integrations": [] }
+  ],
+  "openQuestions": ["Who approves refunds above $500?"],
+  "conflicts": [],
+  "decisions": [],
+  "assumptions": [],
+  "neededInfo": [],
+  "version": 1,
+  "updatedAt": "2025-01-15T12:00:00.000Z"
+}
