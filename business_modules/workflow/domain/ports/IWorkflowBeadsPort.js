@@ -6,6 +6,14 @@ function IWorkflowBeadsPort() {
   }
 }
 
+/**
+ * Convert the plan artifacts produced by the plan step into a Beads task graph.
+ * Parses plan.md and creates a bd task for each item so that agents and humans
+ * can use `bd ready` to discover their next coding task.
+ * Falls back to a single feature-level task when no plan is readable.
+ * @param {object} inputs - { planArtifacts, featureTitle, workflowRunId }
+ * @returns {Promise<{ status: string, artifacts: Array, metrics: object, errors: Array }>}
+ */
 IWorkflowBeadsPort.prototype.run = function (inputs) {
   throw new Error('run not implemented');
 };
