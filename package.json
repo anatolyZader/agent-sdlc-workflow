@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node src/app/server.js",
     "dev": "node --watch src/app/server.js",
-    "test": "node --test tests/business_modules/workflow/app/workflowService.test.js tests/business_modules/eventstorm/app/eventstormService.test.js tests/business_modules/workflow/app/gates/gateRunner.test.js tests/integration/workflow-api.test.js",
+    "test": "node --test tests/business_modules/workflow/app/workflowService.test.js tests/business_modules/eventstorm/app/eventstormService.test.js tests/business_modules/eventstorm/infrastructure/adapters/claudeCodeEventstormAdapter.test.js tests/business_modules/workflow/app/gates/gateRunner.test.js tests/integration/workflow-api.test.js",
     "migrate": "node src/cross-cut-modules/persistence/runMigrations.js"
   },
   "engines": {
