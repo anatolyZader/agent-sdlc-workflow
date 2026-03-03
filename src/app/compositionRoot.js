@@ -37,6 +37,7 @@ function createContainer() {
       artifactStorePath: process.env.ARTIFACT_STORE_PATH,
       useSpecKitPackage: process.env.USE_SPEC_KIT_PACKAGE === '1' || process.env.USE_SPEC_KIT_PACKAGE === 'true',
       specifyAutoInit: process.env.SPECIFY_AUTO_INIT === '1' || process.env.SPECIFY_AUTO_INIT === 'true',
+      useLangGraph: process.env.USE_LANGGRAPH !== '0' && process.env.USE_LANGGRAPH !== 'false',
     }),
   });
 
@@ -176,10 +177,41 @@ function createContainer() {
     budgetController: awilix.asClass(budgetControllerModule.BudgetController).singleton(),
   });
 
-  // Step executor: run workflow steps in-process (after all step controllers are registered)
+  // Step executor: run workflow steps in-process (after all step controllers are registered).
+  // LangGraph is the default step executor. It models each step execution as a two-node
+  // LangGraph (execute_step → check_gates) and exposes buildPipelineGraph() for full-pipeline
+  // visualisation/execution. Set USE_LANGGRAPH=0 to fall back to InProcessStepExecutorAdapter.
   const inProcessStepExecutor = require(path.join(projectRoot, 'business_modules/workflow/infrastructure/adapters/inProcessStepExecutorAdapter'));
+  const langGraphWorkflowAdapterModule = require(path.join(projectRoot, 'business_modules/workflow/infrastructure/adapters/langGraphWorkflowAdapter'));
   container.register({
-    stepExecutor: awilix.asClass(inProcessStepExecutor.InProcessStepExecutorAdapter).singleton(),
+    stepExecutor: awilix.asFunction(({ config, eventstormController, c4Controller, specController, planController, beadsController, tddController, lintController, secureController, docController }) => {
+      if (config.useLangGraph) {
+        return new langGraphWorkflowAdapterModule.LangGraphWorkflowAdapter({
+          eventstormController,
+          c4Controller,
+          specController,
+          planController,
+          beadsController,
+          tddController,
+          lintController,
+          secureController,
+          docController,
+          config,
+        });
+      }
+      return new inProcessStepExecutor.InProcessStepExecutorAdapter({
+        eventstormController,
+        c4Controller,
+        specController,
+        planController,
+        beadsController,
+        tddController,
+        lintController,
+        secureController,
+        docController,
+        config,
+      });
+    }).singleton(),
   });
 
   return container;

@@ -54,6 +54,43 @@ async function runBdReady(projectRoot, options = {}) {
 }
 
 /**
+ * Run `bd add <title>` to create a new task in the beads task graph.
+ * @param {string} projectRoot
+ * @param {string} title - Task title
+ * @returns {Promise<{ ok: boolean, stdout: string, stderr: string, code: number | null }>}
+ */
+async function runBdAdd(projectRoot, title) {
+  return runBd(['add', title], projectRoot);
+}
+
+/**
+ * Parse a markdown plan file and extract task titles.
+ * Recognises GFM task-list items (- [ ] / - [x]) and top-level plain bullets (- / *).
+ * @param {string} markdown
+ * @returns {string[]} Ordered list of task title strings
+ */
+function parsePlanMarkdown(markdown) {
+  const lines = (markdown || '').split('\n');
+  const tasks = [];
+  for (const line of lines) {
+    const trimmed = line.trim();
+    // GFM task list: - [ ] Title  or  - [x] Title
+    const taskMatch = trimmed.match(/^-\s*\[[ xX]\]\s+(.+)/);
+    if (taskMatch) {
+      tasks.push(taskMatch[1].trim());
+      continue;
+    }
+    // Top-level plain bullet (no indentation): - Title  or  * Title
+    // Skip very short items (≤2 chars) which are likely formatting noise, not real tasks
+    const bulletMatch = line.match(/^[-*]\s+(?!\[)(.+)/);
+    if (bulletMatch && bulletMatch[1].trim().length > 2) {
+      tasks.push(bulletMatch[1].trim());
+    }
+  }
+  return tasks;
+}
+
+/**
  * Check if .beads exists in project (already inited).
  */
 async function isBeadsInited(projectRoot) {
@@ -95,6 +132,8 @@ module.exports = {
   runBd,
   runBdInit,
   runBdReady,
+  runBdAdd,
+  parsePlanMarkdown,
   isBeadsInited,
   writeSdlcRunState,
   SDLC_RUN_STATE_FILENAME,
